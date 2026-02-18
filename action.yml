@@ -10,11 +10,12 @@ inputs:
     description: Runner release tag (e.g., v0.1.0) or 'latest'
     required: false
     default: latest
-  runner_token:
-    description: GitHub token with read access to runner repo releases (fine-grained token recommended)
-    required: false
+  # RENAME THIS to match README
+  github_token: 
+    description: GitHub token with read access to runner repo releases
+    required: true # Set to true if you want to enforce it, or false if public download is allowed
   runner_base_url:
-    description: Optional override download base (e.g., https://downloads.saykai.com/runner)
+    description: Optional override download base
     required: false
   spec_path:
     description: Path to saykai.yml
@@ -31,7 +32,8 @@ runs:
     - name: Run Saykai
       shell: bash
       env:
-        SAYKAI_RUNNER_TOKEN: ${{ inputs.runner_token }}
+        # MAP THE NEW INPUT NAME HERE
+        SAYKAI_RUNNER_TOKEN: ${{ inputs.github_token }}
       run: |
         bash "${{ github.action_path }}/scripts/run.sh" \
           "${{ inputs.runner_repo }}" \
