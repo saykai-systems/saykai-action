@@ -1,30 +1,47 @@
-name: Saykai CI Gate
+name: Saykai Safety Gate
 description: Run Saykai safety checks in CI and block on violations
+author: Saykai
+
+# Add branding to look professional in the Marketplace
+branding:
+  icon: 'shield'
+  color: 'green'
 
 inputs:
-  runner_repo:
+  # renamed to kebab-case to match README
+  runner-repo:
     description: Repo that hosts the runner release assets (owner/name)
     required: false
     default: saykai-systems/runner
-  runner_version:
+  runner-version:
     description: Runner release tag (e.g., v0.1.0) or 'latest'
     required: false
     default: latest
-  # RENAME THIS to match README
-  github_token: 
-    description: GitHub token with read access to runner repo releases
-    required: true # Set to true if you want to enforce it, or false if public download is allowed
-  runner_base_url:
-    description: Optional override download base
+  runner-base-url:
+    description: Optional override download base (e.g., https://downloads.saykai.com/runner)
     required: false
-  spec_path:
+  
+  # Crucial: Matches "with: github-token" in README
+  github-token: 
+    description: GitHub token with read access to runner repo releases
+    required: true
+    
+  # Crucial: Matches "with: spec-path" in README
+  spec-path:
     description: Path to saykai.yml
     required: false
     default: saykai.yml
-  out_path:
+    
+  out-path:
     description: Output Safety Pack path
     required: false
     default: safety_pack.json
+
+  # Added to match README "Configuration" table
+  fail-on-error:
+    description: If true, the CI job fails if the Saykai engine encounters an internal error (Fail Closed).
+    required: false
+    default: 'true'
 
 runs:
   using: composite
@@ -32,12 +49,14 @@ runs:
     - name: Run Saykai
       shell: bash
       env:
-        # MAP THE NEW INPUT NAME HERE
-        SAYKAI_RUNNER_TOKEN: ${{ inputs.github_token }}
+        # Maps the input to the ENV var your script expects
+        SAYKAI_RUNNER_TOKEN: ${{ inputs.github-token }}
+        # Pass fail-on-error as an ENV var (safest way to add it without breaking script args)
+        SAYKAI_FAIL_ON_ERROR: ${{ inputs.fail-on-error }}
       run: |
         bash "${{ github.action_path }}/scripts/run.sh" \
-          "${{ inputs.runner_repo }}" \
-          "${{ inputs.runner_version }}" \
-          "${{ inputs.runner_base_url }}" \
-          "${{ inputs.spec_path }}" \
-          "${{ inputs.out_path }}"
+          "${{ inputs.runner-repo }}" \
+          "${{ inputs.runner-version }}" \
+          "${{ inputs.runner-base_url }}" \
+          "${{ inputs.spec-path }}" \
+          "${{ inputs.out-path }}"
