@@ -20,7 +20,7 @@ inputs:
   runner-base-url:
     description: Optional override download base (e.g., https://downloads.saykai.com/runner)
     required: false
-  
+   
   # Crucial: Matches "with: github-token" in README
   github-token: 
     description: GitHub token with read access to runner repo releases
@@ -51,12 +51,27 @@ runs:
       env:
         # Maps the input to the ENV var your script expects
         SAYKAI_RUNNER_TOKEN: ${{ inputs.github-token }}
-        # Pass fail-on-error as an ENV var (safest way to add it without breaking script args)
+        # Pass fail-on-error as an ENV var
         SAYKAI_FAIL_ON_ERROR: ${{ inputs.fail-on-error }}
       run: |
+        # Temporarily disable immediate exit (set +e) to capture the script's return code
+        set +e
         bash "${{ github.action_path }}/scripts/run.sh" \
           "${{ inputs.runner-repo }}" \
           "${{ inputs.runner-version }}" \
           "${{ inputs.runner-base_url }}" \
           "${{ inputs.spec-path }}" \
           "${{ inputs.out-path }}"
+        EXIT_CODE=$?
+        set -e
+
+        # Check exit code against the fail-on-error policy
+        if [ $EXIT_CODE -ne 0 ]; then
+          if [ "${SAYKAI_FAIL_ON_ERROR}" == "true" ]; then
+            echo "::error::Saykai Safety Gate failed (Exit Code: $EXIT_CODE)."
+            exit $EXIT_CODE
+          else
+            echo "::warning::Saykai Safety Gate failed (Exit Code: $EXIT_CODE), but fail-on-error is false. CI proceeding."
+            exit 0
+          fi
+        fi
