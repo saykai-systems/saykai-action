@@ -41,7 +41,7 @@ jobs:
         with:
           spec-path: 'saykai.yml'
           github-token: ${{ secrets.GITHUB_TOKEN }}
-
+```
 ## Configuration
 
 | Input | Description | Required | Default |
