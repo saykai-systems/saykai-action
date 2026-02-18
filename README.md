@@ -1,51 +1,93 @@
-# saykai-ci-safety-gate
+# Saykai Safety Gate
 
-Internal CI safety gate for Saykai.
+CI enforcement for AI systems.
 
-This repository contains the CI-facing integration layer that invokes Saykai evaluations and translates results into enforceable CI outcomes. It is private by design.
+Saykai evaluates AI changes during pull requests and blocks unsafe regressions before they ship. It converts Safety Spec evaluations into deterministic CI outcomes.
 
-## Purpose
-- Act as the enforcement boundary between CI systems and Saykai evaluations
-- Invoke the Saykai runner in a controlled, repeatable way
-- Convert evaluation results into CI signals (pass, block, report-only)
-- Surface human-readable summaries and machine-readable outputs for downstream steps
+---
 
-## What this repo is NOT
-- Not a public GitHub Action
-- Not a general-purpose CI plugin
-- Not a reference implementation for external users
+## Overview
 
-## Responsibilities
-This repo is responsible for:
+The Saykai Safety Gate integrates directly with CI to enforce AI safety policies as code.
+
+On every pull request, it:
+
+- Evaluates changes against a defined Safety Spec
+- Detects safety regressions introduced by prompt, tool, or configuration changes
+- Fails the build when high-severity violations are found
+- Produces clear, actionable summaries inside GitHub
+
+The result is a single, unambiguous CI status: pass, block, or report-only.
+
+---
+
+## How It Works
+
+1. CI triggers the Saykai Safety Gate.
+2. The gate invokes the Saykai evaluation engine with the appropriate context.
+3. Evaluation results are interpreted deterministically.
+4. The pull request receives a CI status reflecting policy compliance.
+
+If evaluation results are missing, invalid, or ambiguous, the gate fails closed.
+
+---
+
+## Enforcement Model
+
+Saykai treats safety as a testable contract.
+
+- Safety policies are defined as code.
+- Evaluations are repeatable and deterministic.
+- Violations are surfaced with rule identifiers and remediation guidance.
+- Enforcement thresholds can be configured per repository or environment.
+
+This ensures that safety behavior does not regress silently over time.
+
+---
+
+## Design Principles
+
+- Deterministic CI outcomes  
+- Clear and actionable failure messages  
+- No nondeterministic or flaky behavior  
+- Safety-first defaults  
+- Explicit, versioned interfaces  
+
+---
+
+## Data Handling
+
+By default:
+
+- Prompts are not stored
+- Outputs are not retained
+- Only evaluation results and rule identifiers are surfaced to CI
+
+Logs are concise and scrubbed of sensitive data.  
+Retention and evidence options can be configured as needed.
+
+---
+
+## Scope
+
+This repository provides the CI-facing enforcement layer.
+
+It is responsible for:
+
 - Input validation and normalization
-- Calling the runner with the appropriate context
-- Interpreting runner output deterministically
-- Failing closed when results are missing, invalid, or ambiguous
+- Invoking the Saykai evaluation engine
+- Converting evaluation results into CI signals
+- Failing closed when required
 
-This repo is explicitly **not** responsible for:
-- Core evaluation logic
-- Rule or policy definition
-- Safety decision heuristics
+Core evaluation logic, policy definitions, and scoring mechanisms are maintained separately.
 
-Those live elsewhere.
+---
 
-## Expected behavior
-When functioning correctly, this safety gate should:
-- Produce a single, unambiguous CI result
-- Make failures obvious and actionable
-- Avoid flaky or non-deterministic behavior
-- Default to safety over permissiveness
+## Usage
 
-## Repo hygiene
-- No secrets in git. Use CI-provided secrets only.
-- Do not commit production specs, rules, or policies.
-- Keep logs concise and scrubbed of sensitive data.
-- Avoid adding demo or example workflows intended for public use.
+Add the Safety Gate to your GitHub workflow:
 
-## Change management
-- Treat interface changes as breaking unless proven otherwise
-- Update any dependent internal workflows when contracts change
-- Prefer backward-compatible output whenever possible
-
-## Ownership
-Maintained by the Saykai team.
+```yaml
+- uses: saykai/saykai-action@v1
+  with:
+    spec-path: safety/safety-spec.yml
