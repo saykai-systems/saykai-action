@@ -1,0 +1,29 @@
+controller_server:
+  ros__parameters:
+    general_goal_checker:
+      xy_goal_tolerance: 0.10
+    FollowPath:
+      max_vel_x: 0.40
+      acc_lim_x: 2.00
+      acc_lim_theta: 4.00
+
+velocity_smoother:
+  ros__parameters:
+    max_velocity: [0.40, 0.20, 2.00]
+    max_accel: [2.00, 2.00, 4.00]
+
+local_costmap:
+  local_costmap:
+    ros__parameters:
+      robot_radius: 0.20
+      inflation_layer:
+        inflation_radius: 0.50
+
+global_costmap:
+  global_costmap:
+    ros__parameters:
+      robot_radius: 0.20
+      inflation_layer:
+        inflation_radius: 0.50
+
+max_scaling_factor: 0.90
