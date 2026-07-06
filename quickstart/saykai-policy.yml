@@ -1,0 +1,140 @@
+version: "1.0"
+
+policy:
+  name: "Starter Safety Policy"
+  mode: "customer_approved"
+  # These hard_limits are ILLUSTRATIVE STARTING VALUES, not derived for any
+  # specific robot. Do not treat them as safe defaults for your platform.
+  # Before relying on this policy:
+  #   1. Run `saykai-runner calibrate` with your robot's real physical specs
+  #      (sensor detection range, perception/planning latency, actual
+  #      achievable braking deceleration) to get a physics-derived
+  #      suggestion -- see the main README's Configuration section.
+  #   2. Have a qualified safety engineer review and explicitly approve
+  #      whatever numbers you end up using.
+  calibration_status: "pending_baseline_calibration"
+  decision_authority: "customer"
+  notes: "Starting point only. Replace hard_limits below with values your own safety engineer has reviewed and approved -- see saykai-runner calibrate for a physics-derived starting suggestion."
+
+thresholds:
+  class_b:
+    source: "manual_initial_policy"
+    approval_required: true
+
+    hard_limits:
+      max_speed: 0.45
+      min_bubble: 0.15
+      max_accel: 2.50
+      max_scale: 1.00
+      max_angular_speed: 2.50
+      max_angular_accel: 5.00
+
+    calibration:
+      enabled: false
+      baseline_source: "baselines"
+      method: "not_calibrated"
+
+  # class_a and class_c follow the same hard_limits shape as class_b above.
+  # Only add them if you actually operate more than one robot class --
+  # select which one applies per run with `saykai-runner run --class <name>`.
+  # Don't invent numbers for a class you don't have real data for; an
+  # unrecognized or omitted class falls back to class_b automatically.
+
+rules:
+  # Room 1: entropy/secret scanning. Runs on every file in scan.root
+  # regardless of this section -- these entries only customize severity/
+  # action, they don't turn the scan itself on or off.
+  high_entropy:
+    enabled: true
+    severity: high
+    action: block
+    explanation: "Detected a high-entropy string that may represent a secret, token, key, or encoded payload."
+    remediation: "Remove the secret-like value, move it to a secure secret store, or explicitly allow it through the allowlist below if it's a known-safe fixture."
+
+  # Room 3: Nav2 policy audit. Each of these maps to one class of
+  # configured-value violation; severity/action here override the built-in
+  # defaults if you need something other than block-on-detection.
+  policy_violation:
+    enabled: true
+    severity: high
+    action: block
+    explanation: "Detected a violation of an approved safety threshold."
+    remediation: "Review the policy threshold and update the target configuration or request policy approval."
+
+  nav2_max_speed_exceeded:
+    enabled: true
+    severity: high
+    action: block
+    explanation: "Detected a Nav2 max velocity value above the approved safety limit."
+    remediation: "Reduce max_vel_x (or the velocity_smoother/max_velocity equivalent) or update the approved policy limit after safety review."
+
+  nav2_accel_exceeded:
+    enabled: true
+    severity: high
+    action: block
+    explanation: "Detected a Nav2 acceleration value above the approved safety limit."
+    remediation: "Reduce acc_lim_x (or the velocity_smoother/max_accel equivalent) or update the approved policy limit after safety review."
+
+  nav2_min_bubble_violation:
+    enabled: true
+    severity: high
+    action: block
+    explanation: "Detected an inflation radius below the approved minimum safety buffer."
+    remediation: "Increase inflation_radius or update the approved minimum buffer after safety review."
+
+  nav2_max_scale_exceeded:
+    enabled: true
+    severity: medium
+    action: review
+    explanation: "Detected a scaling value above the approved policy limit."
+    remediation: "Review the scaling parameter and confirm it is appropriate for the robot class."
+
+  nav2_stopping_distance_risk:
+    enabled: true
+    severity: high
+    action: block
+    explanation: "Estimated stopping distance exceeds the available configured safety buffer."
+    remediation: "Reduce speed, increase available buffer, or adjust acceleration limits after safety review."
+
+  nav2_inflation_radius_vs_footprint_risk:
+    enabled: true
+    severity: high
+    action: block
+    explanation: "Detected an inflation_radius smaller than robot_radius -- the costmap inflation doesn't even cover the robot's own footprint."
+    remediation: "Increase inflation_radius to at least exceed robot_radius. Typical Nav2 configurations set it to several times robot_radius."
+
+  nav2_goal_tolerance_vs_footprint_risk:
+    enabled: true
+    severity: high
+    action: block
+    explanation: "Detected an xy_goal_tolerance smaller than 10% of robot_radius -- the robot cannot physically achieve this precision and will oscillate near goals."
+    remediation: "Increase xy_goal_tolerance to at least 10% of robot_radius. Typical AMR configurations use 20-50% of robot_radius."
+
+  # Room 2: behavioral simulation. Only runs at all if scan.root contains a
+  # robot_brain.py AND scenarios are defined below. Leave scenarios empty
+  # (or omit this section) if you don't use Room 2 yet.
+  behavioral_fatal:
+    enabled: true
+    severity: critical
+    action: block
+    explanation: "Detected unsafe behavior during simulation."
+    remediation: "Review the behavioral simulation output and correct the unsafe behavior before merging."
+
+  behavioral_latency:
+    enabled: true
+    severity: low
+    action: review
+    explanation: "Robot brain made the correct decision but exceeded the scenario latency budget. Informational only -- does not block the build."
+    remediation: "Investigate brain reaction time if this recurs."
+
+# Room 2 scenarios (optional -- delete this section if you don't have a
+# robot_brain.py in scan.root). Each scenario passes `inputs` to your
+# robot_brain.py as one compact-JSON argv argument and checks the printed
+# decision against expected_decision.
+scenarios: []
+
+allowlist:
+  enabled: true
+  files: []
+  patterns: []
+  notes: "Allowlist entries should require review and should only be used for known-safe fixtures (test data, examples, etc.), never real secrets or approved-but-risky config."

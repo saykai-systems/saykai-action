@@ -40,6 +40,30 @@ jobs:
             exit 1
           fi
 
+  # Keeps quickstart/ honest: if a future change to the runner or its
+  # default rules would break the copy-pasteable starter template, this
+  # catches it here rather than a real customer discovering it first.
+  expect-quickstart-pass:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Saykai against quickstart/ (expect PASS)
+        uses: ./
+        with:
+          spec-path: quickstart/saykai.yml
+          github-token: ${{ secrets.SAYKAI_RELEASES_READ_TOKEN }}
+
+      - name: Assert outcome is PASS
+        run: |
+          test -f outputs/run-result.json
+          OUTCOME=$(grep -o '"outcome": *"[^"]*"' outputs/run-result.json | head -1 | sed -E 's/.*"outcome": *"([^"]*)"/\1/')
+          echo "Outcome: $OUTCOME"
+          if [[ "$OUTCOME" != "PASS" ]]; then
+            echo "::error::Expected the quickstart template to PASS but got '$OUTCOME' -- the copy-pasteable starter is now broken for real customers"
+            exit 1
+          fi
+
   expect-block:
     runs-on: ubuntu-latest
     steps:

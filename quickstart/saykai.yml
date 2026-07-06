@@ -1,0 +1,25 @@
+version: "1.0"
+project: "Your-Project-Name"
+
+ci_gate:
+  strict: true
+  deep_scan: true
+  enforcement: enabled
+
+# Where your Nav2 params live in this repo. Point this at the real
+# directory containing your controller/costmap/velocity_smoother YAML
+# (and, if you use Room 2 behavioral checks, a robot_brain.py).
+scan:
+  mode: folder
+  root: scan_targets
+
+outputs:
+  directory: outputs
+
+audits:
+  directory: audits
+
+# Path is relative to your repo root (the workspace saykai-action checks
+# out), not relative to this file.
+policy:
+  file: saykai-policy.yml
