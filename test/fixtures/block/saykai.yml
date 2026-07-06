@@ -8,7 +8,7 @@ ci_gate:
 
 scan:
   mode: folder
-  root: scan_targets
+  root: test/fixtures/block/scan_targets
 
 outputs:
   directory: outputs
@@ -17,4 +17,4 @@ audits:
   directory: audits
 
 policy:
-  file: saykai-policy.yml
+  file: test/fixtures/block/saykai-policy.yml
