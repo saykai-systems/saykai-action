@@ -9,9 +9,9 @@ branding:
 
 inputs:
   runner-repo:
-    description: Repo that hosts the runner release assets (owner/name)
+    description: Repo that hosts the runner release assets (owner/name). This is a dedicated, source-free release-hosting repo, not the runner's own source repo.
     required: false
-    default: saykai-systems/runner
+    default: saykai-systems/saykai-releases
   runner-version:
     description: Runner release tag (e.g., v1.0.1) or 'latest'
     required: false
@@ -22,7 +22,7 @@ inputs:
 
   # Crucial: Matches "with: github-token" in README
   github-token:
-    description: GitHub token with read access to runner repo releases
+    description: Token with read access to the runner-repo release assets. Scope this to runner-repo only -- it should never have access to Saykai's source repo.
     required: true
 
   # Crucial: Matches "with: spec-path" in README
