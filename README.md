@@ -54,6 +54,10 @@ jobs:
           # the auto-generated ${{ secrets.GITHUB_TOKEN }}, which only has
           # access to your own repo and can't read saykai-releases at all.
           github-token: ${{ secrets.SAYKAI_RELEASES_TOKEN }}
+          # Optional: posts/updates a single PR comment summarizing the run.
+          # This IS the auto-generated token -- it's scoped to your own
+          # repo, which is exactly what's needed to comment on your own PR.
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
 ## Configuration
@@ -66,6 +70,7 @@ jobs:
 | `runner-version`  | `saykai-runner` release tag (e.g. `v1.0.1`) or `latest`.                                 | No       | `latest`                   |
 | `runner-base-url` | Alternate download base for a self-hosted mirror (e.g. `https://downloads.saykai.com/runner`). Requires an explicit `runner-version` — not compatible with `latest`. | No       | _(unset — uses `runner-repo`)_ |
 | `fail-on-error`   | If `true`, the CI job fails if the Saykai engine encounters an internal error (Fail Closed). | No       | `true`                     |
+| `repo-token`      | Token with `pull-requests: write` on *your own* repo (not `runner-repo`) -- typically `${{ secrets.GITHUB_TOKEN }}`. When set, posts/updates a single PR comment summarizing the run (findings table included). Requires your workflow to grant `pull-requests: write`. | No | _(unset — no PR comment posted)_ |
 
 ## How It Works
 
@@ -80,7 +85,11 @@ jobs:
 4.  **Analysis:** Findings are interpreted deterministically against your
     policy's thresholds and rules.
 5.  **Reporting:** The pull request receives a CI status reflecting policy
-    compliance, plus a findings table in the job summary.
+    compliance, a findings table in the job summary, inline annotations on
+    the flagged file/line (in "Files changed" and the job's Annotations
+    list), and -- if `repo-token` is set -- a single PR comment summarizing
+    the run, updated in place on every push rather than posted fresh each
+    time.
 
 > **Reliability Guarantee:** If evaluation results are missing, invalid, or
 > ambiguous, the gate **fails closed**. This extends to the binary itself:

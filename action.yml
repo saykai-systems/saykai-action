@@ -37,6 +37,17 @@ inputs:
     required: false
     default: 'true'
 
+  repo-token:
+    description: >-
+      Optional. A token with pull-requests:write on YOUR OWN repo (not
+      runner-repo) -- typically your workflow's own default, auto-generated
+      per-run GITHUB_TOKEN secret, already scoped to your repo. When set,
+      posts/updates a single PR comment summarizing the run. Requires your
+      workflow to grant pull-requests:write permission. Left unset by
+      default: no comment is posted, and the gate behaves exactly as before.
+    required: false
+    default: ''
+
 runs:
   using: composite
   steps:
@@ -54,7 +65,8 @@ runs:
           "${{ inputs.runner-repo }}" \
           "${{ inputs.runner-version }}" \
           "${{ inputs.runner-base-url }}" \
-          "${{ inputs.spec-path }}"
+          "${{ inputs.spec-path }}" \
+          "${{ inputs.repo-token }}"
         EXIT_CODE=$?
         set -e
 

@@ -5,6 +5,7 @@ RUNNER_REPO="${1:-saykai-systems/runner}"
 RUNNER_VERSION="${2:-latest}"
 RUNNER_BASE_URL="${3:-}"
 SPEC_PATH="${4:-saykai.yml}"
+REPO_TOKEN="${5:-}"
 
 ACTION_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORK_DIR="${GITHUB_WORKSPACE:-$(pwd)}"
@@ -193,12 +194,31 @@ RC=$?
 set -e
 
 echo "Saykai completed. Result: $RESULT_PATH"
-# emit_annotations and write_step_summary are purely cosmetic reporting;
-# `|| true` guarantees neither can override $RC below, even via a failure
-# mode not handled inside them (the JSON-parsing case is handled explicitly
-# in both, but this is the backstop against anything else going wrong).
+# emit_annotations, write_step_summary, and the PR comment below are purely
+# cosmetic reporting; `|| true` guarantees none of them can override $RC
+# below, even via a failure mode not handled inside them (the JSON-parsing
+# case is handled explicitly in each, but this is the backstop against
+# anything else going wrong).
 emit_annotations || true
 write_step_summary "$RC" || true
+
+# PR number only exists on pull_request(_target) events; GITHUB_EVENT_PATH
+# is a JSON file GitHub always provides describing the trigger event.
+PR_NUMBER=""
+if [[ "${GITHUB_EVENT_NAME:-}" == "pull_request" || "${GITHUB_EVENT_NAME:-}" == "pull_request_target" ]]; then
+  if [[ -n "${GITHUB_EVENT_PATH:-}" && -f "${GITHUB_EVENT_PATH}" ]] && command -v python3 >/dev/null 2>&1; then
+    PR_NUMBER="$(python3 -c "
+import json
+try:
+    with open('${GITHUB_EVENT_PATH}') as f:
+        d = json.load(f)
+    print(d.get('pull_request', {}).get('number', ''))
+except (OSError, json.JSONDecodeError):
+    pass
+" 2>/dev/null || true)"
+  fi
+fi
+bash "${ACTION_DIR}/pr-comment.sh" "$RESULT_PATH" "$REPO_TOKEN" "$PR_NUMBER" || true
 
 # Preserve runner exit code
 exit "$RC"
