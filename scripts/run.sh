@@ -5,16 +5,21 @@ RUNNER_REPO="${1:-saykai-systems/runner}"
 RUNNER_VERSION="${2:-latest}"
 RUNNER_BASE_URL="${3:-}"
 SPEC_PATH="${4:-saykai.yml}"
-OUT_PATH="${5:-safety_pack.json}"
 
 ACTION_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORK_DIR="${GITHUB_WORKSPACE:-$(pwd)}"
 BIN_DIR="${WORK_DIR}/.saykai/bin"
-RUNNER_PATH="${BIN_DIR}/saykai"
+RUNNER_PATH="${BIN_DIR}/saykai-runner"
+
+# The runner writes its own fixed output paths (outputs/run-result.json,
+# safety_pack.json) relative to its working directory -- it has no --out
+# flag to redirect them, so RESULT_PATH must match that fixed location,
+# not a user-configurable one.
+RESULT_PATH="outputs/run-result.json"
 
 mkdir -p "$BIN_DIR"
 
-# Run from the workspace so relative paths (spec/out) behave predictably
+# Run from the workspace so relative paths (spec/policy/scan root) behave predictably
 cd "$WORK_DIR"
 
 # Install runner
@@ -40,49 +45,58 @@ write_step_summary() {
     echo ""
     echo "**Exit code:** ${rc}"
     echo "**Spec:** \`${SPEC_PATH}\`"
-    echo "**Output:** \`${OUT_PATH}\`"
+    echo "**Result:** \`${RESULT_PATH}\`"
     echo ""
   } >> "$GITHUB_STEP_SUMMARY"
 
-  if [[ -f "$OUT_PATH" ]]; then
+  if [[ -f "$RESULT_PATH" ]]; then
     if command -v python3 >/dev/null 2>&1; then
-      python3 - "$OUT_PATH" >> "$GITHUB_STEP_SUMMARY" <<'PY'
-import json,sys
+      python3 - "$RESULT_PATH" >> "$GITHUB_STEP_SUMMARY" <<'PY'
+import json, sys
 
-path=sys.argv[1]
-with open(path,"r",encoding="utf-8") as f:
-  d=json.load(f)
+path = sys.argv[1]
+with open(path, "r", encoding="utf-8") as f:
+    d = json.load(f)
 
-decision=d.get("decision","UNKNOWN")
-runner=d.get("runner",{}) or {}
-summary=d.get("summary",{}) or {}
+outcome = d.get("outcome", "UNKNOWN")
+trace_id = d.get("trace_id", "?")
+seal = d.get("seal", "")
+summary = d.get("summary", {}) or {}
+findings = d.get("findings", []) or []
 
-print(f"**Decision:** {decision}")
-print(f"**Runner version:** {runner.get('version','?')}")
+print(f"**Outcome:** {outcome}")
+print(f"**Trace ID:** {trace_id}")
+if seal:
+    print(f"**Seal:** {seal[:12]}...")
 
-commit = runner.get("commit") or runner.get("sha")
-if commit:
-  print(f"**Runner commit:** {commit}")
+print(
+    f"**Files scanned:** {summary.get('files_scanned', '?')} | "
+    f"**Findings:** {summary.get('findings_count', '?')} | "
+    f"**Blocking:** {summary.get('blocking_findings', '?')}"
+)
 
-spec = summary.get("spec_path")
-if spec is not None:
-  print(f"**Spec path (reported):** {spec}")
-
-msg = summary.get("message")
-if msg:
-  print("")
-  print("### Summary")
-  print(str(msg))
+if findings:
+    print("")
+    print("### Findings")
+    print("")
+    print("| Rule | Severity | Action | File |")
+    print("| --- | --- | --- | --- |")
+    for finding in findings:
+        rule_id = finding.get("rule_id", "")
+        severity = finding.get("severity", "")
+        action = finding.get("action", "")
+        file_path = finding.get("file", "")
+        print(f"| `{rule_id}` | {severity} | {action} | `{file_path}` |")
 PY
     else
       {
-        echo "_safety_pack.json exists but python3 is unavailable to render a summary._"
+        echo "_${RESULT_PATH} exists but python3 is unavailable to render a summary._"
         echo ""
       } >> "$GITHUB_STEP_SUMMARY"
     fi
   else
     {
-      echo "_No safety pack file found at the expected path. Runner may have failed before writing output._"
+      echo "_No run-result.json found at the expected path. Runner may have failed before writing output._"
       echo ""
     } >> "$GITHUB_STEP_SUMMARY"
   fi
@@ -91,11 +105,11 @@ PY
 # Run (capture exit code so we can always write a summary)
 echo "Running Saykai runner..."
 set +e
-"$RUNNER_PATH" run --spec "$SPEC_PATH" --out "$OUT_PATH"
+"$RUNNER_PATH" run --spec "$SPEC_PATH"
 RC=$?
 set -e
 
-echo "Saykai completed. Output: $OUT_PATH"
+echo "Saykai completed. Result: $RESULT_PATH"
 write_step_summary "$RC"
 
 # Preserve runner exit code

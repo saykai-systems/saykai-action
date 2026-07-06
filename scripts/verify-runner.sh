@@ -8,9 +8,10 @@ if [[ ! -x "$RUNNER_PATH" ]]; then
   exit 1
 fi
 
-# Basic sanity: print version if supported
-if "$RUNNER_PATH" --version >/dev/null 2>&1; then
-  echo "Runner version: $("$RUNNER_PATH" --version)"
+# Basic sanity: print version if supported (saykai-runner has a `version`
+# subcommand, not a --version flag).
+if "$RUNNER_PATH" version >/dev/null 2>&1; then
+  echo "Runner version: $("$RUNNER_PATH" version)"
 else
-  echo "Runner installed (no --version supported)."
+  echo "Runner installed (no version subcommand supported)."
 fi
