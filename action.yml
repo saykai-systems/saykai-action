@@ -40,8 +40,8 @@ inputs:
   repo-token:
     description: >-
       Optional. A token with pull-requests:write on YOUR OWN repo (not
-      runner-repo) -- typically ${{ secrets.GITHUB_TOKEN }} (the default,
-      auto-generated per-run token already scoped to your repo). When set,
+      runner-repo) -- typically your workflow's own default, auto-generated
+      per-run GITHUB_TOKEN secret, already scoped to your repo. When set,
       posts/updates a single PR comment summarizing the run. Requires your
       workflow to grant pull-requests:write permission. Left unset by
       default: no comment is posted, and the gate behaves exactly as before.
