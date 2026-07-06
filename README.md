@@ -49,7 +49,11 @@ jobs:
         uses: saykai-systems/saykai-action@v1
         with:
           spec-path: 'saykai.yml'
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          # Provided by Saykai as part of onboarding -- scoped to read only
+          # the saykai-releases repo, never Saykai's source. This is NOT
+          # the auto-generated ${{ secrets.GITHUB_TOKEN }}, which only has
+          # access to your own repo and can't read saykai-releases at all.
+          github-token: ${{ secrets.SAYKAI_RELEASES_TOKEN }}
 ```
 
 ## Configuration
@@ -57,8 +61,8 @@ jobs:
 | Input             | Description                                                                            | Required | Default                    |
 | :----------------- | :--------------------------------------------------------------------------------------- | :------- | :--------------------------- |
 | `spec-path`       | Path to your Saykai project spec (`saykai.yml`).                                        | No       | `saykai.yml`               |
-| `github-token`    | Token with read access to the runner release repo (`runner-repo`).                      | Yes      | —                          |
-| `runner-repo`     | Repo that hosts the `saykai-runner` release assets (`owner/name`).                       | No       | `saykai-systems/runner`    |
+| `github-token`    | Token with read access to `runner-repo`. Should be scoped to that repo only -- see Security below. | Yes      | —                          |
+| `runner-repo`     | Repo that hosts the `saykai-runner` release assets (`owner/name`). A dedicated release-hosting repo containing only compiled binaries, not Saykai's source. | No       | `saykai-systems/saykai-releases` |
 | `runner-version`  | `saykai-runner` release tag (e.g. `v1.0.1`) or `latest`.                                 | No       | `latest`                   |
 | `runner-base-url` | Alternate download base for a self-hosted mirror (e.g. `https://downloads.saykai.com/runner`). Requires an explicit `runner-version` — not compatible with `latest`. | No       | _(unset — uses `runner-repo`)_ |
 | `fail-on-error`   | If `true`, the CI job fails if the Saykai engine encounters an internal error (Fail Closed). | No       | `true`                     |
@@ -117,6 +121,22 @@ Saykai is designed for enterprise security and privacy requirements.
   needed on the runner side (see `saykai-runner`'s audit trail and
   signature verification).
 
+## Security
+
+`runner-repo` defaults to `saykai-systems/saykai-releases` — a dedicated,
+private repo that holds nothing but compiled `saykai-runner` binaries and
+their checksums. This is deliberate: GitHub's permission model has no scope
+that means "read releases only" — a token with read access to a repo can
+clone that repo's entire contents. Your `github-token` should be a
+credential scoped to `saykai-releases` alone (a fine-grained PAT, ideally),
+never one with any access to Saykai's actual source repo. If you're issued
+a token, verify its scope is limited to `saykai-releases` before using it
+here.
+
+Downloaded binaries are checksum-verified against the release's
+`checksums.txt` before being executed — this is mandatory, not best-effort
+(see the Reliability Guarantee above).
+
 ## Scope
 
 This repository provides the CI-facing enforcement layer. It is
@@ -128,7 +148,8 @@ responsible for:
 * Failing closed when required.
 
 *Core evaluation logic, policy definitions, and scoring mechanisms are
-maintained separately, in the (private) `saykai-systems/runner` repo.*
+maintained separately, in a private source repo that this action and its
+release artifacts never expose.*
 
 ## License
 
