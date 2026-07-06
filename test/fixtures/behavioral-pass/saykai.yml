@@ -1,0 +1,7 @@
+version: "1.0"
+project: "Fixture-behavioral-pass"
+scan:
+  mode: folder
+  root: test/fixtures/behavioral-pass/scan_targets
+policy:
+  file: test/fixtures/behavioral-pass/saykai-policy.yml

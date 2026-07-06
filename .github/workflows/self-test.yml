@@ -72,3 +72,96 @@ jobs:
             echo "::error::Expected finding NAV2_MAX_SPEED_EXCEEDED not present in run-result.json"
             exit 1
           fi
+
+  # The jobs above only ever exercise Room 3 (Nav2 policy audit). Room 1
+  # (entropy/secret heuristics) runs on every invocation regardless, but
+  # expect-pass/expect-block never contain anything for it to actually
+  # catch; Room 2 (behavioral simulation) only activates at all when a
+  # robot_brain.py exists in the scan root, which none of the fixtures
+  # above provide. These three jobs close that gap.
+  expect-secret-block:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Saykai (expect BLOCK on Room 1 secret detection)
+        id: saykai
+        continue-on-error: true
+        uses: ./
+        with:
+          spec-path: test/fixtures/secret/saykai.yml
+          github-token: ${{ secrets.SAYKAI_RELEASES_READ_TOKEN }}
+
+      - name: Assert the gate blocked on AWS_KEY
+        run: |
+          if [[ "${{ steps.saykai.outcome }}" != "failure" ]]; then
+            echo "::error::Expected the Saykai step to fail closed on a secret, but it reported '${{ steps.saykai.outcome }}'"
+            exit 1
+          fi
+
+          test -f outputs/run-result.json
+          OUTCOME=$(grep -o '"outcome": *"[^"]*"' outputs/run-result.json | head -1 | sed -E 's/.*"outcome": *"([^"]*)"/\1/')
+          echo "Outcome: $OUTCOME"
+          if [[ "$OUTCOME" != "BLOCK" ]]; then
+            echo "::error::Expected BLOCK but got '$OUTCOME'"
+            exit 1
+          fi
+
+          if ! grep -q "AWS_KEY" outputs/run-result.json; then
+            echo "::error::Expected finding AWS_KEY not present in run-result.json"
+            exit 1
+          fi
+
+  expect-behavioral-pass:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Saykai (expect PASS on Room 2 correct decision)
+        uses: ./
+        with:
+          spec-path: test/fixtures/behavioral-pass/saykai.yml
+          github-token: ${{ secrets.SAYKAI_RELEASES_READ_TOKEN }}
+
+      - name: Assert outcome is PASS
+        run: |
+          test -f outputs/run-result.json
+          OUTCOME=$(grep -o '"outcome": *"[^"]*"' outputs/run-result.json | head -1 | sed -E 's/.*"outcome": *"([^"]*)"/\1/')
+          echo "Outcome: $OUTCOME"
+          if [[ "$OUTCOME" != "PASS" ]]; then
+            echo "::error::Expected PASS but got '$OUTCOME'"
+            exit 1
+          fi
+
+  expect-behavioral-block:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Saykai (expect BLOCK on Room 2 wrong decision)
+        id: saykai
+        continue-on-error: true
+        uses: ./
+        with:
+          spec-path: test/fixtures/behavioral-block/saykai.yml
+          github-token: ${{ secrets.SAYKAI_RELEASES_READ_TOKEN }}
+
+      - name: Assert the gate blocked on BEHAVIORAL_FATAL
+        run: |
+          if [[ "${{ steps.saykai.outcome }}" != "failure" ]]; then
+            echo "::error::Expected the Saykai step to fail closed on unsafe behavior, but it reported '${{ steps.saykai.outcome }}'"
+            exit 1
+          fi
+
+          test -f outputs/run-result.json
+          OUTCOME=$(grep -o '"outcome": *"[^"]*"' outputs/run-result.json | head -1 | sed -E 's/.*"outcome": *"([^"]*)"/\1/')
+          echo "Outcome: $OUTCOME"
+          if [[ "$OUTCOME" != "BLOCK" ]]; then
+            echo "::error::Expected BLOCK but got '$OUTCOME'"
+            exit 1
+          fi
+
+          if ! grep -q "BEHAVIORAL_FATAL" outputs/run-result.json; then
+            echo "::error::Expected finding BEHAVIORAL_FATAL not present in run-result.json"
+            exit 1
+          fi
