@@ -1,0 +1,169 @@
+version: "1.0"
+
+policy:
+  name: "Saykai Local Safety Policy"
+  mode: "customer_approved"
+  calibration_status: "pending_baseline_calibration"
+  decision_authority: "customer"
+  notes: "Initial policy uses manually approved hard limits. Baseline calibration should be added after enough known-safe samples are collected."
+
+thresholds:
+  class_b:
+    source: "manual_initial_policy"
+    approval_required: true
+
+    hard_limits:
+      max_speed: 0.45
+      min_bubble: 0.15
+      max_accel: 2.50
+      max_scale: 1.00
+      max_angular_speed: 2.50
+      max_angular_accel: 5.00
+
+    calibration:
+      enabled: false
+      baseline_source: "baselines"
+      method: "not_calibrated"
+
+rules:
+  high_entropy:
+    enabled: true
+    severity: high
+    action: block
+    source: "saykai_default"
+    explanation: "Detected a high-entropy string that may represent a secret, token, key, or encoded payload."
+    remediation: "Remove the secret-like value, move it to a secure secret store, or explicitly allow it through policy if it is a known-safe fixture."
+
+  scan_target_unavailable:
+    enabled: true
+    severity: high
+    action: block
+    source: "saykai_default"
+    explanation: "The configured scan root was not found."
+    remediation: "Create the scan root folder or update scan.root in saykai.yml."
+
+  policy_violation:
+    enabled: true
+    severity: high
+    action: block
+    source: "customer_policy"
+    explanation: "Detected a violation of an approved safety threshold."
+    remediation: "Review the policy threshold and update the target configuration or request policy approval."
+
+  nav2_max_speed_exceeded:
+    enabled: true
+    severity: high
+    action: block
+    source: "customer_policy"
+    explanation: "Detected a Nav2 max velocity value above the approved safety limit."
+    remediation: "Reduce max_vel_x or update the customer-approved policy limit after safety review."
+
+  nav2_accel_exceeded:
+    enabled: true
+    severity: high
+    action: block
+    source: "customer_policy"
+    explanation: "Detected a Nav2 acceleration value above the approved safety limit."
+    remediation: "Reduce max_accel_x or update the customer-approved policy limit after safety review."
+
+  nav2_min_bubble_violation:
+    enabled: true
+    severity: high
+    action: block
+    source: "customer_policy"
+    explanation: "Detected an inflation radius below the approved minimum safety buffer."
+    remediation: "Increase inflation_radius or update the approved minimum buffer after safety review."
+
+  nav2_max_scale_exceeded:
+    enabled: true
+    severity: medium
+    action: review
+    source: "customer_policy"
+    explanation: "Detected a scaling value above the approved policy limit."
+    remediation: "Review the scaling parameter and confirm it is appropriate for the robot class."
+
+  nav2_stopping_distance_risk:
+    enabled: true
+    severity: high
+    action: block
+    source: "customer_policy"
+    explanation: "Estimated stopping distance exceeds the available configured safety buffer."
+    remediation: "Reduce speed, increase available buffer, or adjust acceleration limits after safety review."
+
+  nav2_lateral_speed_exceeded:
+    enabled: true
+    severity: high
+    action: block
+    source: "customer_policy"
+    explanation: "Detected a Nav2 lateral (Y-axis) velocity above the approved safety limit."
+    remediation: "Reduce max_vel_y / vy_max or update the customer-approved policy limit after safety review."
+
+  nav2_rotational_speed_exceeded:
+    enabled: true
+    severity: high
+    action: block
+    source: "customer_policy"
+    explanation: "Detected a Nav2 rotational (theta-axis) velocity above the approved safety limit."
+    remediation: "Reduce max_vel_theta / wz_max or update the customer-approved policy limit after safety review."
+
+  nav2_lateral_accel_exceeded:
+    enabled: true
+    severity: high
+    action: block
+    source: "customer_policy"
+    explanation: "Detected a Nav2 lateral (Y-axis) acceleration above the approved safety limit."
+    remediation: "Reduce acc_lim_y or update the customer-approved policy limit after safety review."
+
+  nav2_rotational_accel_exceeded:
+    severity: high
+    action: block
+    source: customer_approved
+    explanation: Detected a Nav2 rotational (theta-axis) acceleration above the approved safety limit.
+    remediation: Reduce acc_lim_theta or update the customer-approved policy limit after safety review.
+
+  nav2_inflation_radius_vs_footprint_risk:
+    severity: high
+    action: block
+    source: customer_approved
+    explanation: Detected an inflation_radius smaller than robot_radius. The costmap inflation does not cover the robot's own footprint, so the planner can produce paths that physically cannot be executed.
+    remediation: Increase inflation_radius to at least exceed robot_radius. Typical Nav2 configurations set inflation_radius to several times robot_radius.
+
+  # Phase 5
+  nav2_goal_tolerance_vs_footprint_risk:
+    severity: high
+    action: block
+    source: customer_approved
+    explanation: Detected an xy_goal_tolerance smaller than 10% of robot_radius. The robot cannot physically achieve this position precision and will oscillate near goals trying to reach a tolerance it can't hit.
+    remediation: Increase xy_goal_tolerance to at least 10% of robot_radius. Typical AMR configurations set xy_goal_tolerance to 20-50% of robot_radius.
+
+  behavioral_fatal:
+    enabled: true
+    severity: critical
+    action: block
+    source: "saykai_default"
+    explanation: "Detected unsafe behavior during simulation."
+    remediation: "Review the behavioral simulation output and correct the unsafe behavior before merging."
+
+# Phase 6: non-blocking. Latency measurement includes interpreter startup
+  # and is too coarse to gate a build on, so this surfaces as review only.
+  behavioral_latency:
+    enabled: true
+    severity: low
+    action: review
+    source: "saykai_default"
+    explanation: "Robot brain made the correct decision but exceeded the scenario latency budget."
+    remediation: "Investigate brain reaction time. Informational only; does not block the build."
+
+# Phase 6: behavioral simulation scenarios
+scenarios:
+  - id: pedestrian_close
+    inputs:
+      distance: 3.0
+    expected_decision: BRAKE
+    max_latency_ms: 500
+
+allowlist:
+  enabled: true
+  files: []
+  patterns: []
+  notes: "Allowlist entries should require review and should only be used for known-safe fixtures."
