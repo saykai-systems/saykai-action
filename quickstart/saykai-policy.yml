@@ -75,6 +75,34 @@ rules:
     explanation: "Detected a Nav2 acceleration value above the approved safety limit."
     remediation: "Reduce acc_lim_x (or the velocity_smoother/max_accel equivalent) or update the approved policy limit after safety review."
 
+  nav2_lateral_speed_exceeded:
+    enabled: true
+    severity: high
+    action: block
+    explanation: "Detected a Nav2 lateral (Y-axis) velocity above the approved safety limit."
+    remediation: "Reduce max_vel_y / vy_max or update the approved policy limit after safety review."
+
+  nav2_rotational_speed_exceeded:
+    enabled: true
+    severity: high
+    action: block
+    explanation: "Detected a Nav2 rotational (theta-axis) velocity above the approved safety limit."
+    remediation: "Reduce max_vel_theta / wz_max / max_rotational_vel or update the approved policy limit after safety review."
+
+  nav2_lateral_accel_exceeded:
+    enabled: true
+    severity: high
+    action: block
+    explanation: "Detected a Nav2 lateral (Y-axis) acceleration above the approved safety limit."
+    remediation: "Reduce acc_lim_y or update the approved policy limit after safety review."
+
+  nav2_rotational_accel_exceeded:
+    enabled: true
+    severity: high
+    action: block
+    explanation: "Detected a Nav2 rotational (theta-axis) acceleration above the approved safety limit."
+    remediation: "Reduce acc_lim_theta or update the approved policy limit after safety review."
+
   nav2_min_bubble_violation:
     enabled: true
     severity: high
