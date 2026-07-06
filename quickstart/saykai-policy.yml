@@ -51,6 +51,13 @@ rules:
     explanation: "Detected a high-entropy string that may represent a secret, token, key, or encoded payload."
     remediation: "Remove the secret-like value, move it to a secure secret store, or explicitly allow it through the allowlist below if it's a known-safe fixture."
 
+  scan_target_unavailable:
+    enabled: true
+    severity: high
+    action: block
+    explanation: "The configured scan root was not found."
+    remediation: "Create the scan root folder or update scan.root in saykai.yml."
+
   # Room 3: Nav2 policy audit. Each of these maps to one class of
   # configured-value violation; severity/action here override the built-in
   # defaults if you need something other than block-on-detection.
