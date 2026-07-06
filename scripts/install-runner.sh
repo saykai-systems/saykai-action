@@ -54,7 +54,7 @@ download_from_base_url() {
   curl -fsSL "${base%/}/${version}/${asset_name}" -o "${WORK_DIR}/${asset_name}"
 
   if ! curl -fsSL "${base%/}/${version}/${CHECKSUMS_NAME}" -o "${WORK_DIR}/${CHECKSUMS_NAME}"; then
-    echo "WARNING: could not fetch ${CHECKSUMS_NAME} from base URL; skipping checksum verification." >&2
+    echo "WARNING: could not fetch ${CHECKSUMS_NAME} from base URL; verify_checksum will refuse to install an unverified binary." >&2
   fi
 
   echo "$asset_name" > "${WORK_DIR}/.asset_name"
@@ -164,7 +164,7 @@ raise SystemExit(1)
   if [[ -n "${checksums_id:-}" ]]; then
     download_github_asset_by_id "$repo" "$token" "$checksums_id" "${WORK_DIR}/${CHECKSUMS_NAME}"
   else
-    echo "WARNING: no checksums.txt asset found on this release; skipping checksum verification." >&2
+    echo "WARNING: no checksums.txt asset found on this release; verify_checksum will refuse to install an unverified binary." >&2
   fi
 
   echo "$asset_name" > "${WORK_DIR}/.asset_name"
@@ -173,15 +173,22 @@ raise SystemExit(1)
 verify_checksum() {
   local asset_name="$1"
 
+  # Fail closed: this action is a safety gate, and the binary it installs
+  # is the thing that enforces every other guarantee it makes. Silently
+  # proceeding when integrity can't be verified (missing checksums.txt, or
+  # no entry for this asset) would mean an accidentally- or maliciously-
+  # unsigned release installs and runs with zero verification and only an
+  # easily-missed log warning. Refuse instead.
   if [[ ! -f "${WORK_DIR}/${CHECKSUMS_NAME}" ]]; then
-    return 0
+    echo "ERROR: ${CHECKSUMS_NAME} is not available; refusing to install an unverified binary." >&2
+    exit 1
   fi
 
   local expected
   expected="$(grep " ${asset_name}\$" "${WORK_DIR}/${CHECKSUMS_NAME}" | awk '{print $1}')"
   if [[ -z "$expected" ]]; then
-    echo "WARNING: no checksum entry for ${asset_name} in ${CHECKSUMS_NAME}; skipping verification." >&2
-    return 0
+    echo "ERROR: no checksum entry for ${asset_name} in ${CHECKSUMS_NAME}; refusing to install an unverified binary." >&2
+    exit 1
   fi
 
   local actual

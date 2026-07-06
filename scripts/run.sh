@@ -55,8 +55,21 @@ write_step_summary() {
 import json, sys
 
 path = sys.argv[1]
-with open(path, "r", encoding="utf-8") as f:
-    d = json.load(f)
+try:
+    with open(path, "r", encoding="utf-8") as f:
+        d = json.load(f)
+except (OSError, json.JSONDecodeError) as e:
+    # The step summary is informational only -- it must never be able to
+    # affect the action's real pass/fail exit code (that's $RC, captured
+    # separately in run.sh from the runner's own process, not from this
+    # script). Degrade gracefully instead of raising: a crashed/truncated
+    # run-result.json would otherwise make this process exit non-zero,
+    # which -- because this call happens after `set -e` is re-enabled in
+    # run.sh -- would replace the runner's real exit code with this
+    # script's, silently corrupting the CI gate's own verdict.
+    print(f"_Could not parse {path}: {e}_")
+    print("")
+    sys.exit(0)
 
 outcome = d.get("outcome", "UNKNOWN")
 trace_id = d.get("trace_id", "?")
@@ -110,7 +123,11 @@ RC=$?
 set -e
 
 echo "Saykai completed. Result: $RESULT_PATH"
-write_step_summary "$RC"
+# write_step_summary is purely cosmetic reporting; `|| true` guarantees it
+# can never override $RC below, even via a failure mode not handled inside
+# it (the JSON-parsing case is handled explicitly above, but this is the
+# backstop against anything else going wrong in there).
+write_step_summary "$RC" || true
 
 # Preserve runner exit code
 exit "$RC"

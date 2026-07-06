@@ -67,7 +67,10 @@ jobs:
 
 1.  **Trigger:** CI triggers the Saykai Safety Gate on a pull request.
 2.  **Install:** The action downloads and checksum-verifies the matching
-    `saykai-runner` release for the job's OS/architecture.
+    `saykai-runner` release for the job's OS/architecture. Verification is
+    mandatory, not best-effort: if `checksums.txt` isn't available, or has
+    no entry for the downloaded asset, the action **fails** rather than
+    installing an unverified binary.
 3.  **Execution:** The gate invokes `saykai-runner run` against your Nav2
     config and safety policy.
 4.  **Analysis:** Findings are interpreted deterministically against your
@@ -76,7 +79,8 @@ jobs:
     compliance, plus a findings table in the job summary.
 
 > **Reliability Guarantee:** If evaluation results are missing, invalid, or
-> ambiguous, the gate **fails closed**.
+> ambiguous, the gate **fails closed**. This extends to the binary itself:
+> if its integrity can't be verified, installation fails closed too.
 
 ## Enforcement Model
 
