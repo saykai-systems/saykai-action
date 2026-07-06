@@ -6,12 +6,19 @@ ci_gate:
   deep_scan: true
   enforcement: enabled
 
+# IMPORTANT: scan.root and policy.file below are relative to your REPO
+# ROOT (the workspace saykai-action checks out), not relative to this
+# saykai.yml file's own location. As shipped, these paths match this
+# template's own layout (nested under quickstart/) so it's verifiable as-is
+# in CI -- if you move saykai.yml elsewhere (e.g. flatten it to your repo
+# root), update these two paths to match.
+
 # Where your Nav2 params live in this repo. Point this at the real
 # directory containing your controller/costmap/velocity_smoother YAML
 # (and, if you use Room 2 behavioral checks, a robot_brain.py).
 scan:
   mode: folder
-  root: scan_targets
+  root: quickstart/scan_targets
 
 outputs:
   directory: outputs
@@ -19,7 +26,5 @@ outputs:
 audits:
   directory: audits
 
-# Path is relative to your repo root (the workspace saykai-action checks
-# out), not relative to this file.
 policy:
-  file: saykai-policy.yml
+  file: quickstart/saykai-policy.yml

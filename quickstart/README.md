@@ -13,9 +13,15 @@ template. This directory is the real thing.)
 
 1. Copy `saykai.yml`, `saykai-policy.yml`, and (optionally) `scan_targets/`
    into your own repo.
-2. Point `saykai.yml`'s `scan.root` at wherever your real Nav2 params
-   actually live (delete the placeholder `scan_targets/` once you've
-   confirmed the gate runs cleanly against it).
+2. **`scan.root` and `policy.file` inside `saykai.yml` are relative to your
+   repo root, not to `saykai.yml`'s own location** — as shipped they say
+   `quickstart/scan_targets` and `quickstart/saykai-policy.yml` to match
+   this template's own layout (so it's verifiable as-is in this repo's CI).
+   If you flatten these files to your own repo root instead of keeping the
+   `quickstart/` nesting, update both paths to match, then point
+   `scan.root` at wherever your real Nav2 params actually live (delete the
+   placeholder `scan_targets/` once you've confirmed the gate runs cleanly
+   against it).
 3. **Do not treat `saykai-policy.yml`'s `hard_limits` as safe defaults for
    your robot.** They're illustrative starting values only. Run
    `saykai-runner calibrate` with your robot's real sensor range,
