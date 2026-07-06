@@ -60,6 +60,11 @@ jobs:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
+Don't have a `saykai.yml`/`saykai-policy.yml` yet? See
+[`quickstart/`](quickstart/) for a real, working starting pair you can
+copy into your own repo — not illustrative pseudo-config, an actual policy
+file that's been run and verified.
+
 ## Configuration
 
 | Input             | Description                                                                            | Required | Default                    |
