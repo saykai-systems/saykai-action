@@ -1,5 +1,5 @@
 name: Saykai Safety Gate
-description: Run Saykai safety checks in CI and block on violations
+description: Audit Nav2/ROS2 robot configs in CI and block on safety violations
 author: Saykai
 
 # Add branding to look professional in the Marketplace
@@ -8,34 +8,28 @@ branding:
   color: 'green'
 
 inputs:
-  # renamed to kebab-case to match README
   runner-repo:
     description: Repo that hosts the runner release assets (owner/name)
     required: false
     default: saykai-systems/runner
   runner-version:
-    description: Runner release tag (e.g., v0.1.0) or 'latest'
+    description: Runner release tag (e.g., v1.0.1) or 'latest'
     required: false
     default: latest
   runner-base-url:
     description: Optional override download base (e.g., https://downloads.saykai.com/runner)
     required: false
-   
+
   # Crucial: Matches "with: github-token" in README
-  github-token: 
+  github-token:
     description: GitHub token with read access to runner repo releases
     required: true
-    
+
   # Crucial: Matches "with: spec-path" in README
   spec-path:
     description: Path to saykai.yml
     required: false
     default: saykai.yml
-    
-  out-path:
-    description: Output Safety Pack path
-    required: false
-    default: safety_pack.json
 
   # Added to match README "Configuration" table
   fail-on-error:
@@ -59,9 +53,8 @@ runs:
         bash "${{ github.action_path }}/scripts/run.sh" \
           "${{ inputs.runner-repo }}" \
           "${{ inputs.runner-version }}" \
-          "${{ inputs.runner-base_url }}" \
-          "${{ inputs.spec-path }}" \
-          "${{ inputs.out-path }}"
+          "${{ inputs.runner-base-url }}" \
+          "${{ inputs.spec-path }}"
         EXIT_CODE=$?
         set -e
 
