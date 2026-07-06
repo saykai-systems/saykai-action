@@ -120,15 +120,29 @@ configuration does not regress silently over time.
 
 ## Data Handling
 
-Saykai is designed for enterprise security and privacy requirements.
+**Your Nav2 config never leaves your own CI runner.** This isn't a policy
+promise — it follows directly from how the system is built: Saykai has no
+backend service this action talks to. The only network calls this action
+ever makes are (1) downloading the `saykai-runner` binary from
+`saykai-releases`, checksum-verified before use, and (2) — only if you set
+`repo-token` — posting a comment back to your own pull request via
+GitHub's own API. Your actual robot configuration is read, evaluated, and
+reported on entirely inside the runner executing your workflow (GitHub-
+hosted or self-hosted). It is never transmitted to Saykai, logged by
+Saykai, or stored anywhere outside your own repository and CI environment.
 
-* **Minimal Surface:** Only evaluation results (findings, pass/block signal)
-  are surfaced to CI — not your robot's raw sensor data or telemetry.
-* **Sanitized Logs:** Console logs are concise and scrubbed of sensitive
+* **No telemetry, no phone-home:** the `saykai-runner` binary itself makes
+  no network calls during evaluation — it reads local files and writes
+  local files, full stop.
+* **Minimal surface in CI:** only evaluation results (findings, pass/block
+  signal, a cryptographic seal) reach your PR — not raw sensor data,
+  telemetry, or anything beyond what's already in your Nav2 config.
+* **Audit trail stays yours:** signed audit records (`audits/*.json`,
+  `safety_pack.json`) are written to your own workspace/job artifacts,
+  under your own retention and access control — Saykai never receives a
+  copy, automatically or otherwise.
+* **Sanitized logs:** console output is concise and scrubbed of sensitive
   data by default.
-* **Configurable:** Retention and evidence options can be configured as
-  needed on the runner side (see `saykai-runner`'s audit trail and
-  signature verification).
 
 ## Security
 
