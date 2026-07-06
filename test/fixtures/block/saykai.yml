@@ -1,0 +1,20 @@
+version: "1.0"
+project: "Saykai-Action-SelfTest-Block"
+
+ci_gate:
+  strict: true
+  deep_scan: true
+  enforcement: enabled
+
+scan:
+  mode: folder
+  root: test/fixtures/block/scan_targets
+
+outputs:
+  directory: outputs
+
+audits:
+  directory: audits
+
+policy:
+  file: test/fixtures/block/saykai-policy.yml

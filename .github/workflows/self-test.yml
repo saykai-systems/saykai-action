@@ -1,0 +1,74 @@
+name: Self Test
+
+# Dogfoods this action against itself (`uses: ./`) on every push/PR, using
+# fixture Nav2 configs committed under test/fixtures/. This is the standard
+# pattern for testing GitHub Actions (mirrors how actions/checkout,
+# actions/setup-node, etc. test themselves) -- it validates action.yml and
+# the scripts directly against the real interface, before a version is ever
+# tagged, with no separate repo to fall out of sync.
+#
+# Requires a repo secret SAYKAI_RELEASES_READ_TOKEN: a fine-grained PAT
+# scoped to saykai-systems/saykai-releases only (Contents: read), the same
+# credential shape a real client is issued. The default secrets.GITHUB_TOKEN
+# can't be used here -- it's scoped to this repo only and has no access to
+# the private saykai-releases repo the action needs to download from.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  expect-pass:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Saykai (expect PASS)
+        uses: ./
+        with:
+          spec-path: test/fixtures/pass/saykai.yml
+          github-token: ${{ secrets.SAYKAI_RELEASES_READ_TOKEN }}
+
+      - name: Assert outcome is PASS
+        run: |
+          test -f outputs/run-result.json
+          OUTCOME=$(grep -o '"outcome": *"[^"]*"' outputs/run-result.json | head -1 | sed -E 's/.*"outcome": *"([^"]*)"/\1/')
+          echo "Outcome: $OUTCOME"
+          if [[ "$OUTCOME" != "PASS" ]]; then
+            echo "::error::Expected PASS but got '$OUTCOME'"
+            exit 1
+          fi
+
+  expect-block:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Saykai (expect BLOCK)
+        id: saykai
+        continue-on-error: true
+        uses: ./
+        with:
+          spec-path: test/fixtures/block/saykai.yml
+          github-token: ${{ secrets.SAYKAI_RELEASES_READ_TOKEN }}
+
+      - name: Assert the gate actually blocked
+        run: |
+          if [[ "${{ steps.saykai.outcome }}" != "failure" ]]; then
+            echo "::error::Expected the Saykai step to fail closed on a violation, but it reported '${{ steps.saykai.outcome }}'"
+            exit 1
+          fi
+
+          test -f outputs/run-result.json
+          OUTCOME=$(grep -o '"outcome": *"[^"]*"' outputs/run-result.json | head -1 | sed -E 's/.*"outcome": *"([^"]*)"/\1/')
+          echo "Outcome: $OUTCOME"
+          if [[ "$OUTCOME" != "BLOCK" ]]; then
+            echo "::error::Expected BLOCK but got '$OUTCOME'"
+            exit 1
+          fi
+
+          if ! grep -q "NAV2_MAX_SPEED_EXCEEDED" outputs/run-result.json; then
+            echo "::error::Expected finding NAV2_MAX_SPEED_EXCEEDED not present in run-result.json"
+            exit 1
+          fi
