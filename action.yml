@@ -51,15 +51,17 @@ inputs:
 runs:
   using: composite
   steps:
+    # This step always exits 0 -- the real pass/fail decision is made in
+    # "Enforce fail-on-error policy" below, AFTER the artifact upload runs.
+    # Doing it this way (rather than exiting non-zero here directly) means a
+    # BLOCK verdict can't skip the artifact upload, since a failed step
+    # would otherwise stop the rest of the composite action's steps.
     - name: Run Saykai
+      id: run
       shell: bash
       env:
-        # Maps the input to the ENV var your script expects
         SAYKAI_RUNNER_TOKEN: ${{ inputs.github-token }}
-        # Pass fail-on-error as an ENV var
-        SAYKAI_FAIL_ON_ERROR: ${{ inputs.fail-on-error }}
       run: |
-        # Temporarily disable immediate exit (set +e) to capture the script's return code
         set +e
         bash "${{ github.action_path }}/scripts/run.sh" \
           "${{ inputs.runner-repo }}" \
@@ -69,12 +71,34 @@ runs:
           "${{ inputs.repo-token }}"
         EXIT_CODE=$?
         set -e
+        echo "exit-code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+        exit 0
 
-        # Check exit code against the fail-on-error policy
-        if [ $EXIT_CODE -ne 0 ]; then
+    # Uploads the signed safety pack regardless of pass/fail -- this is the
+    # actual portable evidence artifact (audit/governance), not just a CI
+    # convenience. continue-on-error: true because an upload failure (e.g. a
+    # transient network issue) is a reporting problem, not a safety one --
+    # it must never be able to affect the gate's real verdict below.
+    - name: Upload Saykai safety pack
+      if: always()
+      continue-on-error: true
+      uses: actions/upload-artifact@v4
+      with:
+        name: saykai-safety-pack
+        path: safety_pack.json
+        if-no-files-found: warn
+        retention-days: 90
+
+    - name: Enforce fail-on-error policy
+      shell: bash
+      env:
+        SAYKAI_FAIL_ON_ERROR: ${{ inputs.fail-on-error }}
+        EXIT_CODE: ${{ steps.run.outputs.exit-code }}
+      run: |
+        if [ "${EXIT_CODE:-0}" -ne 0 ]; then
           if [ "${SAYKAI_FAIL_ON_ERROR}" == "true" ]; then
             echo "::error::Saykai Safety Gate failed (Exit Code: $EXIT_CODE)."
-            exit $EXIT_CODE
+            exit "$EXIT_CODE"
           else
             echo "::warning::Saykai Safety Gate failed (Exit Code: $EXIT_CODE), but fail-on-error is false. CI proceeding."
             exit 0

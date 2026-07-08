@@ -90,15 +90,42 @@ file that's been run and verified.
 4.  **Analysis:** Findings are interpreted deterministically against your
     policy's thresholds and rules.
 5.  **Reporting:** The pull request receives a CI status reflecting policy
-    compliance, a findings table in the job summary, inline annotations on
-    the flagged file/line (in "Files changed" and the job's Annotations
-    list), and -- if `repo-token` is set -- a single PR comment summarizing
-    the run, updated in place on every push rather than posted fresh each
-    time.
+    compliance, a findings table (with observed-vs-limit evidence, not just
+    a rule ID) in the job summary, inline annotations on the flagged
+    file/line (in "Files changed" and the job's Annotations list), and --
+    if `repo-token` is set -- a single PR comment summarizing the run,
+    updated in place on every push rather than posted fresh each time. The
+    job summary also expands into full remediation guidance and allowlist
+    status per finding.
+6.  **Evidence:** The signed `safety_pack.json` for the run is uploaded as
+    a workflow artifact (`saykai-safety-pack`, 90-day retention) on every
+    run, pass or block -- a portable, downloadable record for audit or
+    governance, not just a CI-only signal. See Verifying a Safety Pack
+    below.
 
 > **Reliability Guarantee:** If evaluation results are missing, invalid, or
 > ambiguous, the gate **fails closed**. This extends to the binary itself:
 > if its integrity can't be verified, installation fails closed too.
+
+## Verifying a Safety Pack
+
+Every run uploads its signed `safety_pack.json` as a workflow artifact,
+regardless of outcome. Download it from the run's **Artifacts** section,
+extract it, then from the same directory confirm it hasn't been altered
+since it was sealed:
+
+```
+saykai-runner verify
+```
+
+(`verify` looks for `safety_pack.json` in the current directory by
+default.) This checks the cryptographic seal (and, when the machine holds
+the trusted signing key, the Ed25519 signature) over the *entire* record --
+not just the findings, every field -- so an edited outcome, timestamp, or
+finding is detected, not just a tampered file hash. This is what makes the
+artifact something you can actually hand to an auditor or attach to a
+change record, rather than a JSON file that's only trustworthy as long as
+nobody's touched it.
 
 ## Enforcement Model
 

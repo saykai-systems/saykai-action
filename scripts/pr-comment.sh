@@ -65,14 +65,31 @@ else:
     outcome = d.get("outcome", "UNKNOWN")
     trace_id = d.get("trace_id", "?")
     seal = d.get("seal", "")
+    robot_class = d.get("robot_class", "")
     summary = d.get("summary", {}) or {}
     findings = d.get("findings", []) or []
+
+    def format_evidence(me):
+        if not me:
+            return "n/a"
+        method = me.get("method", "")
+        if method == "threshold_comparison":
+            observed, limit, op = me.get("observed"), me.get("limit"), me.get("operator", "")
+            op_symbol = {"gt": ">", "lt": "<"}.get(op, op)
+            if observed is not None and limit is not None:
+                return f"{observed:.4f} {op_symbol} {limit:.4f}"
+        elif method == "shannon_entropy":
+            score, threshold = me.get("score"), me.get("threshold")
+            if score is not None and threshold is not None:
+                return f"score {score:.2f} > {threshold:.2f}"
+        return "n/a"
 
     icon = {"PASS": ":white_check_mark:", "BLOCK": ":no_entry:"}.get(outcome, ":warning:")
 
     body_lines = [marker, f"### {icon} Saykai Safety Gate: {outcome}", ""]
     seal_part = f" | **Seal:** `{seal[:12]}...`" if seal else ""
-    body_lines.append(f"**Trace ID:** `{trace_id}`{seal_part}")
+    class_part = f" | **Robot class:** {robot_class}" if robot_class else ""
+    body_lines.append(f"**Trace ID:** `{trace_id}`{seal_part}{class_part}")
     body_lines.append(
         f"**Files scanned:** {summary.get('files_scanned', '?')} | "
         f"**Findings:** {summary.get('findings_count', '?')} | "
@@ -81,13 +98,19 @@ else:
 
     if findings:
         body_lines.append("")
-        body_lines.append("| Rule | Severity | Action | File |")
-        body_lines.append("| --- | --- | --- | --- |")
+        body_lines.append("| Rule | Severity | Action | File | Evidence |")
+        body_lines.append("| --- | --- | --- | --- | --- |")
         for finding in findings:
+            evidence = format_evidence(finding.get("math_evidence") or {})
             body_lines.append(
                 f"| `{finding.get('rule_id', '')}` | {finding.get('severity', '')} | "
-                f"{finding.get('action', '')} | `{finding.get('file', '')}` |"
+                f"{finding.get('action', '')} | `{finding.get('file', '')}` | {evidence} |"
             )
+        body_lines.append("")
+        body_lines.append(
+            "_Remediation guidance, allowlist status, and the signed evidence "
+            "artifact are in this run's job summary and Artifacts._"
+        )
 
 body = "\n".join(body_lines)
 

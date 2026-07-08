@@ -145,13 +145,33 @@ except (OSError, json.JSONDecodeError) as e:
 outcome = d.get("outcome", "UNKNOWN")
 trace_id = d.get("trace_id", "?")
 seal = d.get("seal", "")
+robot_class = d.get("robot_class", "")
 summary = d.get("summary", {}) or {}
 findings = d.get("findings", []) or []
+
+
+def format_evidence(me):
+    if not me:
+        return "n/a"
+    method = me.get("method", "")
+    if method == "threshold_comparison":
+        observed, limit, op = me.get("observed"), me.get("limit"), me.get("operator", "")
+        op_symbol = {"gt": ">", "lt": "<"}.get(op, op)
+        if observed is not None and limit is not None:
+            return f"{observed:.4f} {op_symbol} {limit:.4f}"
+    elif method == "shannon_entropy":
+        score, threshold = me.get("score"), me.get("threshold")
+        if score is not None and threshold is not None:
+            return f"score {score:.2f} > {threshold:.2f}"
+    return "n/a"
+
 
 print(f"**Outcome:** {outcome}")
 print(f"**Trace ID:** {trace_id}")
 if seal:
     print(f"**Seal:** {seal[:12]}...")
+if robot_class:
+    print(f"**Robot class:** {robot_class}")
 
 print(
     f"**Files scanned:** {summary.get('files_scanned', '?')} | "
@@ -163,14 +183,46 @@ if findings:
     print("")
     print("### Findings")
     print("")
-    print("| Rule | Severity | Action | File |")
-    print("| --- | --- | --- | --- |")
+    print("| Rule | Severity | Action | File | Evidence |")
+    print("| --- | --- | --- | --- | --- |")
     for finding in findings:
         rule_id = finding.get("rule_id", "")
         severity = finding.get("severity", "")
         action = finding.get("action", "")
         file_path = finding.get("file", "")
-        print(f"| `{rule_id}` | {severity} | {action} | `{file_path}` |")
+        evidence = format_evidence(finding.get("math_evidence") or {})
+        print(f"| `{rule_id}` | {severity} | {action} | `{file_path}` | {evidence} |")
+
+    print("")
+    print("<details>")
+    print("<summary>Full details per finding (explanation, remediation, allowlist status)</summary>")
+    print("")
+    for finding in findings:
+        rule_id = finding.get("rule_id", "")
+        file_path = finding.get("file", "")
+        explanation = finding.get("explanation", "")
+        remediation = finding.get("remediation", "")
+        print(f"**`{rule_id}`** (`{file_path}`)")
+        if explanation:
+            print(f"- {explanation}")
+        if remediation:
+            print(f"- Remediation: {remediation}")
+        if finding.get("allowlisted"):
+            reason = finding.get("allow_reason") or "no reason recorded"
+            source = finding.get("allow_source") or "unknown source"
+            print(f"- Allowlisted: {reason} (source: {source}) -- this finding did NOT block the build")
+        print("")
+    print("</details>")
+
+print("")
+print(
+    "The signed evidence artifact (`safety_pack.json`) for this run is "
+    "attached to this workflow run under **Artifacts**. To confirm it "
+    "hasn't been altered since it was sealed, download and extract it, "
+    "then from that directory run `saykai-runner verify` (it looks for "
+    "`safety_pack.json` in the current directory by default) on a "
+    "machine with the trusted signing key."
+)
 PY
     else
       {
