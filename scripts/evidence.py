@@ -23,4 +23,29 @@ def format_evidence(me):
         score, threshold = me.get("score"), me.get("threshold")
         if score is not None and threshold is not None:
             return f"score {score:.2f} > {threshold:.2f}"
+    elif method == "stopping_distance":
+        distance, buffer = me.get("distance"), me.get("buffer")
+        if distance is not None and buffer is not None:
+            tipping_risk = me.get("tipping_risk") or ""
+            risk_part = f" (tipping risk: {tipping_risk})" if tipping_risk else ""
+            return f"stopping distance {distance:.4f}m > buffer {buffer:.4f}m{risk_part}"
+    elif method == "cross_parameter_comparison":
+        # Mirrors main.go's buildMathEvidence: cross-parameter rules pass
+        # through an arbitrary set of numeric fields beyond the reserved
+        # ones (a rule adding a new field needs no change here or there).
+        reserved = {"method", "result", "parameter", "operator", "line"}
+        numeric_parts = [
+            f"{k}={v:.4f}" for k, v in sorted(me.items())
+            if k not in reserved and isinstance(v, (int, float))
+        ]
+        parameter, op = me.get("parameter", ""), me.get("operator", "")
+        op_symbol = {"gt": ">", "lt": "<"}.get(op, op)
+        if numeric_parts:
+            detail = ", ".join(numeric_parts)
+            label = f"{parameter} {op_symbol}".strip() if parameter else ""
+            return f"{label} ({detail})".strip()
+    elif method == "regex_pattern":
+        pattern = me.get("pattern")
+        if pattern:
+            return f"matched pattern: {pattern}"
     return "n/a"
