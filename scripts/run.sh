@@ -8,6 +8,10 @@ SPEC_PATH="${4:-saykai.yml}"
 REPO_TOKEN="${5:-}"
 
 ACTION_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Lets the inline python3 heredocs below `import evidence` (scripts/evidence.py)
+# instead of each hand-copying its own format_evidence() -- see that file's
+# docstring for why.
+export PYTHONPATH="${ACTION_DIR}${PYTHONPATH:+:${PYTHONPATH}}"
 WORK_DIR="${GITHUB_WORKSPACE:-$(pwd)}"
 BIN_DIR="${WORK_DIR}/.saykai/bin"
 RUNNER_PATH="${BIN_DIR}/saykai-runner"
@@ -124,6 +128,7 @@ write_step_summary() {
     if command -v python3 >/dev/null 2>&1; then
       python3 - "$RESULT_PATH" >> "$GITHUB_STEP_SUMMARY" <<'PY'
 import json, sys
+from evidence import format_evidence
 
 path = sys.argv[1]
 try:
@@ -148,23 +153,6 @@ seal = d.get("seal", "")
 robot_class = d.get("robot_class", "")
 summary = d.get("summary", {}) or {}
 findings = d.get("findings", []) or []
-
-
-def format_evidence(me):
-    if not me:
-        return "n/a"
-    method = me.get("method", "")
-    if method == "threshold_comparison":
-        observed, limit, op = me.get("observed"), me.get("limit"), me.get("operator", "")
-        op_symbol = {"gt": ">", "lt": "<"}.get(op, op)
-        if observed is not None and limit is not None:
-            return f"{observed:.4f} {op_symbol} {limit:.4f}"
-    elif method == "shannon_entropy":
-        score, threshold = me.get("score"), me.get("threshold")
-        if score is not None and threshold is not None:
-            return f"score {score:.2f} > {threshold:.2f}"
-    return "n/a"
-
 
 print(f"**Outcome:** {outcome}")
 print(f"**Trace ID:** {trace_id}")

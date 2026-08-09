@@ -17,6 +17,12 @@ RESULT_PATH="${1:?RESULT_PATH required}"
 REPO_TOKEN="${2:-}"
 PR_NUMBER="${3:-}"
 
+# Derived independently (not inherited from run.sh's own export) so this
+# script's python3 heredoc can `import evidence` (scripts/evidence.py)
+# whether it's invoked from run.sh or run standalone.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export PYTHONPATH="${SCRIPT_DIR}${PYTHONPATH:+:${PYTHONPATH}}"
+
 MARKER="<!-- saykai-safety-gate -->"
 
 if [[ -z "$REPO_TOKEN" ]]; then
@@ -49,6 +55,7 @@ import json
 import sys
 import urllib.error
 import urllib.request
+from evidence import format_evidence
 
 result_path, marker, repo, pr_number, token = sys.argv[1:6]
 
@@ -68,21 +75,6 @@ else:
     robot_class = d.get("robot_class", "")
     summary = d.get("summary", {}) or {}
     findings = d.get("findings", []) or []
-
-    def format_evidence(me):
-        if not me:
-            return "n/a"
-        method = me.get("method", "")
-        if method == "threshold_comparison":
-            observed, limit, op = me.get("observed"), me.get("limit"), me.get("operator", "")
-            op_symbol = {"gt": ">", "lt": "<"}.get(op, op)
-            if observed is not None and limit is not None:
-                return f"{observed:.4f} {op_symbol} {limit:.4f}"
-        elif method == "shannon_entropy":
-            score, threshold = me.get("score"), me.get("threshold")
-            if score is not None and threshold is not None:
-                return f"score {score:.2f} > {threshold:.2f}"
-        return "n/a"
 
     icon = {"PASS": ":white_check_mark:", "BLOCK": ":no_entry:"}.get(outcome, ":warning:")
 
