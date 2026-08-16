@@ -6,13 +6,6 @@ RUNNER_VERSION="${2:-latest}"
 RUNNER_BASE_URL="${3:-}"
 SPEC_PATH="${4:-saykai.yml}"
 REPO_TOKEN="${5:-}"
-# "true" only when action.yml's actions/cache step already restored a
-# binary matching this exact resolved-version+os+arch cache key from a
-# prior run of this job -- never set by anything install-runner.sh itself
-# controls. install-runner.sh's own verify-then-install contract is
-# unchanged and unconditional for every other caller; this flag only ever
-# skips calling it at all, never weakens what it does when it IS called.
-CACHE_HIT="${6:-false}"
 
 ACTION_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Lets the inline python3 heredocs below `import evidence` (scripts/evidence.py)
@@ -34,20 +27,12 @@ mkdir -p "$BIN_DIR"
 # Run from the workspace so relative paths (spec/policy/scan root) behave predictably
 cd "$WORK_DIR"
 
-# Install runner -- skipped only when the calling workflow's actions/cache
-# step already restored a verified binary for this exact version/os/arch
-# (see action.yml). A cache miss, or CACHE_HIT not set at all (e.g.
-# install-runner.sh's own direct/standalone use), always goes through the
-# real download+checksum-verify path below, unchanged from before.
-if [[ "$CACHE_HIT" == "true" && -x "$RUNNER_PATH" ]]; then
-  echo "Using cached saykai-runner binary at ${RUNNER_PATH} (cache hit for this version/os/arch, skipping download)."
-else
-  bash "${ACTION_DIR}/install-runner.sh" \
-    "$RUNNER_REPO" \
-    "$RUNNER_VERSION" \
-    "$RUNNER_BASE_URL" \
-    "$RUNNER_PATH"
-fi
+# Install runner
+bash "${ACTION_DIR}/install-runner.sh" \
+  "$RUNNER_REPO" \
+  "$RUNNER_VERSION" \
+  "$RUNNER_BASE_URL" \
+  "$RUNNER_PATH"
 
 # Optional verification (safe to keep even if you don't have checksums yet)
 bash "${ACTION_DIR}/verify-runner.sh" "$RUNNER_PATH" || true
