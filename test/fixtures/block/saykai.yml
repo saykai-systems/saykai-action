@@ -17,4 +17,4 @@ audits:
   directory: audits
 
 policy:
-  file: test/fixtures/block/saykai-policy.yml
+  file: test/fixtures/common/saykai-policy.yml

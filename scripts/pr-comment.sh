@@ -116,7 +116,12 @@ def api_request(url, method="GET", data=None):
         req.data = json.dumps(data).encode("utf-8")
         req.add_header("Content-Type", "application/json")
     with urllib.request.urlopen(req) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+        raw = resp.read().decode("utf-8")
+        # DELETE (and some other calls) return 204 No Content -- no body to
+        # parse. Every existing caller (GET/POST/PATCH here) always expects
+        # real JSON back, so this only changes behavior for the new DELETE
+        # calls below.
+        return json.loads(raw) if raw else None
 
 
 comments_url = f"https://api.github.com/repos/{repo}/issues/{pr_number}/comments"
@@ -144,8 +149,44 @@ try:
         )
         print(f"Updated existing PR comment ({existing_id}).")
     else:
-        api_request(comments_url, method="POST", data={"body": body})
-        print("Posted new PR comment.")
+        created = api_request(comments_url, method="POST", data={"body": body})
+        created_id = created.get("id") if created else None
+        print(f"Posted new PR comment ({created_id}).")
+
+        # Guards against a real race: this is a plain read-then-write (GET
+        # to check for an existing marker comment, then POST/PATCH based on
+        # what that GET saw), so two overlapping runs on the same PR (a
+        # fast double-push, a manual re-run overlapping a new push) can
+        # both GET before either has POSTed, both find nothing, and both
+        # POST -- producing duplicate comments instead of the single-
+        # comment guarantee described at the top of this file. This script
+        # can't ask the calling workflow for a concurrency: group (that's
+        # the customer's own workflow, not this repo's), so the fix has to
+        # live here: re-check right after our own POST and delete any
+        # other marker comment that shows up, keeping the one we just
+        # created. If both racing runs do this, each may find the other's
+        # comment already 404'd on delete -- caught below and ignored,
+        # either way exactly one comment survives.
+        if created_id is not None:
+            page = 1
+            while True:
+                comments = api_request(f"{comments_url}?per_page=100&page={page}")
+                if not comments:
+                    break
+                for c in comments:
+                    cid = c.get("id")
+                    if cid != created_id and marker in (c.get("body") or ""):
+                        try:
+                            api_request(
+                                f"https://api.github.com/repos/{repo}/issues/comments/{cid}",
+                                method="DELETE",
+                            )
+                            print(f"Removed a duplicate PR comment ({cid}) from a race with another run.")
+                        except (urllib.error.HTTPError, OSError):
+                            pass
+                if len(comments) < 100:
+                    break
+                page += 1
 except urllib.error.HTTPError as e:
     print(f"Could not post/update PR comment: HTTP {e.code} {e.reason}")
 except OSError as e:

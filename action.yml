@@ -51,6 +51,37 @@ inputs:
 runs:
   using: composite
   steps:
+    # Resolves runner-version to a concrete tag before deciding whether to
+    # download at all -- "latest" isn't itself a valid cache key (it means
+    # a different thing every release). Cheap either way: a no-op passthrough
+    # when runner-version is already explicit or runner-base-url is set
+    # (base-url mode requires an explicit version already), one small
+    # metadata API call when it's "latest".
+    - name: Resolve runner version
+      id: resolve
+      shell: bash
+      env:
+        SAYKAI_RUNNER_TOKEN: ${{ inputs.github-token }}
+      run: |
+        VERSION="$(bash "${{ github.action_path }}/scripts/resolve-version.sh" \
+          "${{ inputs.runner-repo }}" \
+          "${{ inputs.runner-version }}")"
+        echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+    # Every gated run otherwise re-downloads and re-verifies the same
+    # binary it downloaded last time, on the exact path a customer's PR
+    # waits on. Caching is keyed on the resolved version above plus os/arch,
+    # so a cache hit is only ever reused for the identical release build --
+    # no revalidation needed at restore time, since the entry is only
+    # written (see run.sh) after install-runner.sh's own checksum
+    # verification already succeeded once.
+    - name: Cache saykai-runner binary
+      id: cache-runner
+      uses: actions/cache@v4
+      with:
+        path: ${{ github.workspace }}/.saykai/bin/saykai-runner
+        key: saykai-runner-${{ runner.os }}-${{ runner.arch }}-${{ steps.resolve.outputs.version }}
+
     # This step always exits 0 -- the real pass/fail decision is made in
     # "Enforce fail-on-error policy" below, AFTER the artifact upload runs.
     # Doing it this way (rather than exiting non-zero here directly) means a
@@ -65,10 +96,11 @@ runs:
         set +e
         bash "${{ github.action_path }}/scripts/run.sh" \
           "${{ inputs.runner-repo }}" \
-          "${{ inputs.runner-version }}" \
+          "${{ steps.resolve.outputs.version }}" \
           "${{ inputs.runner-base-url }}" \
           "${{ inputs.spec-path }}" \
-          "${{ inputs.repo-token }}"
+          "${{ inputs.repo-token }}" \
+          "${{ steps.cache-runner.outputs.cache-hit }}"
         EXIT_CODE=$?
         set -e
         echo "exit-code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
