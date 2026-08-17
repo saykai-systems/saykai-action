@@ -1,10 +1,13 @@
 version: "1.0"
 project: "Your-Project-Name"
 
+# strict and deep_scan are accepted but don't affect gate behavior yet --
+# left here as a placeholder for when that's wired up. Pass/block/observe
+# mode is controlled by the action's own fail-on-error input, not this
+# file.
 ci_gate:
   strict: true
   deep_scan: true
-  enforcement: enabled
 
 # IMPORTANT: scan.root and policy.file below are relative to your REPO
 # ROOT (the workspace saykai-action checks out), not relative to this
