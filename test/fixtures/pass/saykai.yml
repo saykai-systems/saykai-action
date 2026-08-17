@@ -4,7 +4,6 @@ project: "Saykai-Action-SelfTest-Pass"
 ci_gate:
   strict: true
   deep_scan: true
-  enforcement: enabled
 
 scan:
   mode: folder
