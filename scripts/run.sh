@@ -37,6 +37,22 @@ bash "${ACTION_DIR}/install-runner.sh" \
 # Optional verification (safe to keep even if you don't have checksums yet)
 bash "${ACTION_DIR}/verify-runner.sh" "$RUNNER_PATH" || true
 
+# A signing key only works with a runner that knows about it. An older runner
+# would ignore SAYKAI_SIGNING_KEY and quietly sign with a throwaway key, leaving
+# the customer believing their evidence is verifiable when it is not, so stop
+# instead. The help text is captured into a variable first: piping it into
+# `grep -q` can kill the runner with SIGPIPE, which pipefail would then report
+# as a failure even though the word was found.
+if [[ -n "${SAYKAI_SIGNING_KEY:-}" ]]; then
+  RUNNER_HELP="$("$RUNNER_PATH" help 2>/dev/null || true)"
+  if [[ "$RUNNER_HELP" != *keygen* ]]; then
+    echo "::error title=signing-key not supported::signing-key is set, but the saykai-runner that was installed predates persistent signing keys and would ignore it. Use runner-version v1.4.0 or newer."
+    exit 1
+  fi
+else
+  echo "::notice title=Evidence signing::No signing-key set. This run's evidence is signed with a temporary key that is discarded when the job ends, so nobody can verify it afterwards. See 'Signing key' in the README."
+fi
+
 emit_annotations() {
   # Prints ::error::/::warning:: workflow commands directly to stdout (not
   # redirected anywhere) so the Actions runner parses them live and renders
@@ -207,9 +223,10 @@ print(
     "The signed evidence artifact (`safety_pack.json`) for this run is "
     "attached to this workflow run under **Artifacts**. To confirm it "
     "hasn't been altered since it was sealed, download and extract it, "
-    "then from that directory run `saykai-runner verify` (it looks for "
-    "`safety_pack.json` in the current directory by default) on a "
-    "machine with the trusted signing key."
+    "then run `saykai-runner verify safety_pack.json --public-key "
+    "saykai-signing.pub` with the public key you committed. If this run "
+    "was signed with a temporary key (no `signing-key` set), nobody can "
+    "verify it afterwards; see 'Signing key' in the README."
 )
 PY
     else

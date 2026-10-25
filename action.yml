@@ -48,6 +48,18 @@ inputs:
     required: false
     default: ''
 
+  signing-key:
+    description: >-
+      Optional. Your private signing key (the contents of saykai-signing.key,
+      made once with `saykai-runner keygen`), passed as a secret. When set,
+      the safety pack is signed with it, so anyone holding your public key
+      can verify the evidence later. When unset or empty (for example on pull
+      requests from forks, which cannot read secrets), the run is signed with
+      a temporary key that is discarded when the job ends, and nobody can
+      verify it afterwards. Needs saykai-runner v1.4.0 or newer.
+    required: false
+    default: ''
+
 runs:
   using: composite
   steps:
@@ -61,6 +73,7 @@ runs:
       shell: bash
       env:
         SAYKAI_RUNNER_TOKEN: ${{ inputs.github-token }}
+        SAYKAI_SIGNING_KEY: ${{ inputs.signing-key }}
       run: |
         set +e
         bash "${{ github.action_path }}/scripts/run.sh" \
