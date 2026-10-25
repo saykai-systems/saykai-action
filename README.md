@@ -53,12 +53,19 @@ jobs:
           # the saykai-releases repo, never Saykai's source. This is NOT
           # the auto-generated ${{ secrets.GITHUB_TOKEN }}, which only has
           # access to your own repo and can't read saykai-releases at all.
-          github-token: ${{ secrets.SAYKAI_RELEASES_TOKEN }}
+          github-token: ${{ secrets.SAYKAI_RELEASES_READ_TOKEN }}
           # Optional: posts/updates a single PR comment summarizing the run.
           # This IS the auto-generated token -- it's scoped to your own
           # repo, which is exactly what's needed to comment on your own PR.
           repo-token: ${{ secrets.GITHUB_TOKEN }}
+          # Optional but recommended: signs the evidence with a key you hold,
+          # so anyone can verify it later. See "Signing key" below.
+          signing-key: ${{ secrets.SAYKAI_SIGNING_KEY }}
 ```
+
+Store the token Saykai gives you as a repository secret named
+`SAYKAI_RELEASES_READ_TOKEN` (the name is up to you; the examples here use
+this one).
 
 Don't have a `saykai.yml`/`saykai-policy.yml` yet? See
 [`quickstart/`](quickstart/) for a real, working starting pair you can
@@ -76,6 +83,35 @@ file that's been run and verified.
 | `runner-base-url` | Alternate download base for a self-hosted mirror (e.g. `https://downloads.saykai.com/runner`). Requires an explicit `runner-version` — not compatible with `latest`. | No       | _(unset — uses `runner-repo`)_ |
 | `fail-on-error`   | If `true`, the CI job fails if the Saykai engine encounters an internal error (Fail Closed). | No       | `true`                     |
 | `repo-token`      | Token with `pull-requests: write` on *your own* repo (not `runner-repo`) -- typically `${{ secrets.GITHUB_TOKEN }}`. When set, posts/updates a single PR comment summarizing the run (findings table included). Requires your workflow to grant `pull-requests: write`. | No | _(unset — no PR comment posted)_ |
+| `signing-key`     | Your private signing key (the contents of `saykai-signing.key`, made once with `saykai-runner keygen`), passed as a secret. When set, every safety pack is signed with it so anyone with your public key can verify the evidence. Unset or empty (for example on pull requests from forks, which cannot read secrets): the run is signed with a temporary key that is discarded when the job ends. Needs `saykai-runner` v1.4.0 or newer; with an older runner the action stops rather than ignore the key. See [Signing key](#signing-key). | No | _(unset: temporary key)_ |
+
+`runner-version` defaults to `latest`, so new runner releases (which can add
+checks) reach your pipeline automatically. If you need runs to be exactly
+reproducible, pin it to a release tag such as `v1.4.0`.
+
+## What gets audited
+
+The gate reads **every YAML file under your scan root** (`scan.root` in
+`saykai.yml`), whatever the file is called: `nav2_params.yaml`,
+`controller.yaml` and `robot_nav.yml` are all audited the same way. Hidden
+folders (names starting with a dot, such as `.git` and `.github`),
+`node_modules`, `__pycache__`, and the gate's own `outputs` and `audits`
+folders are skipped, and so are files whose names start with `saykai` (the
+gate's own `saykai.yml` and policy files).
+
+If the gate finds **no Nav2 safety parameters at all** (no velocity,
+acceleration, inflation radius or scaling setting in any YAML file) and no
+behavioral scenarios ran, it **blocks** with `NO_NAV2_CONFIG_AUDITED` instead
+of passing. A pass that checked nothing would say nothing about your robot.
+The usual fix is to point `scan.root` at the folder that holds your Nav2
+parameters. A repo that is deliberately gated some other way can set that
+rule to `action: review` (or `enabled: false`) in its policy.
+
+Every run states what it covered, so a pass can be read for what it is:
+
+```
+SCOPE: 1 file(s) scanned for secrets | 1 Nav2 file(s) audited, 9 safety parameter(s) checked
+```
 
 ## How It Works
 
@@ -107,25 +143,84 @@ file that's been run and verified.
 > ambiguous, the gate **fails closed**. This extends to the binary itself:
 > if its integrity can't be verified, installation fails closed too.
 
+## Signing key
+
+Every run produces a signed `safety_pack.json`. By default that signature
+comes from a temporary key that exists only on the CI machine and is thrown
+away when the job ends, so nobody who was not on that machine can ever check
+the evidence. To make it checkable by your auditors, insurers or customers,
+sign with a key you keep:
+
+1. Create a key once, on your own machine (this prints no secret):
+
+   ```
+   saykai-runner keygen
+   ```
+
+   It writes `saykai-signing.pub` (the public half, safe to share) and
+   `saykai-signing.key` (the private half). It never overwrites an existing
+   key.
+2. Store the private half as a repository secret named `SAYKAI_SIGNING_KEY`,
+   then delete the file from your machine:
+
+   ```
+   cat saykai-signing.key | gh secret set SAYKAI_SIGNING_KEY
+   ```
+
+3. Commit `saykai-signing.pub` to your repo. Anyone can use it to verify your
+   evidence; it cannot be used to sign anything.
+4. Pass the secret to the action, as in the Usage example:
+   `signing-key: ${{ secrets.SAYKAI_SIGNING_KEY }}`.
+
+The job log then shows which key signed the run:
+
+```
+SIGNED BY: key 3f2a9c0d1b7e (persistent key from SAYKAI_SIGNING_KEY)
+```
+
+Without a key it shows `(this machine's local key; only this machine can
+verify it)` and the action adds a notice to the run.
+
+The key stays in your CI. The runner uses it only to sign, and removes it from
+the environment before it runs any script from your repository. If
+`signing-key` is set to something that is not a valid key, the run fails
+rather than quietly signing with a temporary one. Pull requests from forks
+cannot read secrets, so they are signed with a temporary key; that is
+expected.
+
+**Rotating the key:** run `saykai-runner keygen --out-dir new-key`, replace
+the secret with the new private key, and add the new public key on a new line
+of `saykai-signing.pub` (one key per line). Keep the old line so older
+evidence still verifies; `verify` accepts every key in the file.
+
 ## Verifying a Safety Pack
 
 Every run uploads its signed `safety_pack.json` as a workflow artifact,
 regardless of outcome. Download it from the run's **Artifacts** section,
-extract it, then from the same directory confirm it hasn't been altered
-since it was sealed:
+extract it, and check it against the public key you committed:
 
 ```
-saykai-runner verify
+saykai-runner verify safety_pack.json --public-key saykai-signing.pub
 ```
 
-(`verify` looks for `safety_pack.json` in the current directory by
-default.) This checks the cryptographic seal (and, when the machine holds
-the trusted signing key, the Ed25519 signature) over the *entire* record --
-not just the findings, every field -- so an edited outcome, timestamp, or
-finding is detected, not just a tampered file hash. This is what makes the
-artifact something you can actually hand to an auditor or attach to a
-change record, rather than a JSON file that's only trustworthy as long as
-nobody's touched it.
+`VERIFIED` means the record is exactly as it was when the run sealed it and
+that your key signed it. This checks the cryptographic seal and the Ed25519
+signature over the *entire* record -- not just the findings, every field -- so
+an edited outcome, timestamp, or finding is detected, not just a tampered
+file hash. Anyone holding the record and your public key can do this; it does
+not need access to your CI or your repo. That is what makes the artifact
+something you can actually hand to an auditor or attach to a change record,
+rather than a JSON file that's only trustworthy as long as nobody's touched
+it.
+
+If the record is intact but was signed by a different key, `verify` says so
+and names both keys. A record signed with the temporary key (no
+`signing-key` set) cannot be verified by anyone afterwards, which is why the
+[Signing key](#signing-key) setup matters.
+
+To check many records in one go, `saykai-runner export --public-key
+saykai-signing.pub` bundles the records in `audits/` into one file with a
+verdict per record.
 
 ## Enforcement Model
 

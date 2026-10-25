@@ -157,6 +157,44 @@ jobs:
             exit 1
           fi
 
+  # Proves the signing-key input end to end on a real runner. The key is made
+  # by OpenSSL, an Ed25519 implementation independent of the runner's own, so
+  # this also checks the key format interoperates. The evidence is then
+  # verified from a different folder using only the public half, the way an
+  # auditor would, and a key that did not sign it must be refused.
+  expect-persistent-signing:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Make a throwaway signing key
+        id: key
+        run: |
+          openssl genpkey -algorithm ed25519 -out "$RUNNER_TEMP/test-key.pem"
+          SEED=$(openssl pkey -in "$RUNNER_TEMP/test-key.pem" -outform DER | tail -c 32 | od -An -tx1 | tr -d ' \n')
+          PUB=$(openssl pkey -in "$RUNNER_TEMP/test-key.pem" -pubout -outform DER | tail -c 32 | od -An -tx1 | tr -d ' \n')
+          echo "::add-mask::$SEED"
+          echo "seed=$SEED" >> "$GITHUB_OUTPUT"
+          echo "$PUB" > "$RUNNER_TEMP/test-signing.pub"
+
+      - name: Run Saykai with the persistent key
+        uses: ./
+        with:
+          spec-path: test/fixtures/pass/saykai.yml
+          github-token: ${{ secrets.SAYKAI_RELEASES_READ_TOKEN }}
+          signing-key: ${{ steps.key.outputs.seed }}
+
+      - name: Assert the evidence verifies with only the public key
+        run: |
+          RUNNER_BIN="$GITHUB_WORKSPACE/.saykai/bin/saykai-runner"
+          cp safety_pack.json "$RUNNER_TEMP/pack.json"
+          cd "$RUNNER_TEMP"
+          "$RUNNER_BIN" verify pack.json --public-key test-signing.pub
+          if "$RUNNER_BIN" verify pack.json --public-key 0000000000000000000000000000000000000000000000000000000000000000; then
+            echo "::error::verify accepted a key that did not sign this pack"
+            exit 1
+          fi
+
   expect-behavioral-block:
     runs-on: ubuntu-latest
     steps:
