@@ -33,9 +33,23 @@ inputs:
 
   # Added to match README "Configuration" table
   fail-on-error:
-    description: If true, the CI job fails if the Saykai engine encounters an internal error (Fail Closed).
+    description: >-
+      If true (the default), the job fails when the gate blocks a change or
+      cannot complete. If false, the job never fails: blocked changes are
+      reported as warnings but are NOT stopped. Use false only to trial the
+      gate without enforcing it.
     required: false
     default: 'true'
+
+  artifact-name:
+    description: >-
+      Name of the uploaded evidence artifact (safety_pack.json). If the gate
+      runs more than once in the same job, give each run a different name:
+      GitHub rejects a name already used in that job, so the later run's
+      evidence would not be kept. In a matrix, a name per entry makes the
+      evidence files easy to tell apart.
+    required: false
+    default: saykai-safety-pack
 
   repo-token:
     description: >-
@@ -59,6 +73,26 @@ inputs:
       verify it afterwards. Needs saykai-runner v1.4.0 or newer.
     required: false
     default: ''
+
+outputs:
+  outcome:
+    description: PASS or BLOCK from the gate, or ERROR if the gate could not produce a result.
+    value: ${{ steps.result.outputs.outcome }}
+  blocking-findings:
+    description: Number of findings that blocked the change (0 on a pass).
+    value: ${{ steps.result.outputs.blocking-findings }}
+  findings:
+    description: Total number of findings, including non-blocking review findings.
+    value: ${{ steps.result.outputs.findings }}
+  trace-id:
+    description: Trace ID of this run, as recorded in the safety pack.
+    value: ${{ steps.result.outputs.trace-id }}
+  signed-by-key:
+    description: Key ID that signed the safety pack. With signing-key set, this is your persistent key.
+    value: ${{ steps.result.outputs.signed-by-key }}
+  evidence-uploaded:
+    description: true if the signed safety pack was uploaded as an artifact, false otherwise.
+    value: ${{ steps.upload.outcome == 'success' }}
 
 runs:
   using: composite
@@ -87,33 +121,80 @@ runs:
         echo "exit-code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
         exit 0
 
+    # Reads the run's own result files into step outputs. Reporting only:
+    # it always exits 0 and never touches the verdict, which is decided by
+    # the runner's exit code in "Enforce fail-on-error policy" below.
+    - name: Read Saykai result
+      id: result
+      if: always()
+      shell: bash
+      run: |
+        python3 - <<'PY' >> "$GITHUB_OUTPUT" || echo "outcome=ERROR" >> "$GITHUB_OUTPUT"
+        import json
+        def load(path):
+            try:
+                with open(path, encoding="utf-8") as f:
+                    return json.load(f)
+            except (OSError, ValueError):
+                return {}
+        r = load("outputs/run-result.json")
+        pack = load("safety_pack.json")
+        summary = r.get("summary") or {}
+        print("outcome=" + str(r.get("outcome") or "ERROR"))
+        print("blocking-findings=" + str(summary.get("blocking_findings", "")))
+        print("findings=" + str(summary.get("findings_count", "")))
+        print("trace-id=" + str(r.get("trace_id") or ""))
+        print("signed-by-key=" + str(pack.get("signed_by_key_fingerprint") or ""))
+        PY
+
     # Uploads the signed safety pack regardless of pass/fail -- this is the
     # actual portable evidence artifact (audit/governance), not just a CI
     # convenience. continue-on-error: true because an upload failure (e.g. a
     # transient network issue) is a reporting problem, not a safety one --
     # it must never be able to affect the gate's real verdict below.
     - name: Upload Saykai safety pack
+      id: upload
       if: always()
       continue-on-error: true
-      uses: actions/upload-artifact@v4
+      # Pinned to the exact commit of v4.6.2 (what @v4 pointed to when this
+      # was written), so the code that handles customers' evidence can't
+      # change underneath them.
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
       with:
-        name: saykai-safety-pack
+        name: ${{ inputs.artifact-name }}
         path: safety_pack.json
-        if-no-files-found: warn
+        if-no-files-found: error
         retention-days: 90
+
+    # The upload is allowed to fail without failing the job (a network blip
+    # is a reporting problem, not a safety one), but it must never fail
+    # silently: missing evidence is exactly what an auditor will ask about.
+    - name: Report missing evidence
+      if: always() && steps.upload.outcome != 'success'
+      shell: bash
+      env:
+        ARTIFACT_NAME: ${{ inputs.artifact-name }}
+      run: |
+        echo "::warning title=Evidence not saved::The signed safety pack was not uploaded as artifact '${ARTIFACT_NAME}'. If the gate runs more than once in this job, give each run a different artifact-name. Otherwise check the upload step's log."
 
     - name: Enforce fail-on-error policy
       shell: bash
       env:
         SAYKAI_FAIL_ON_ERROR: ${{ inputs.fail-on-error }}
         EXIT_CODE: ${{ steps.run.outputs.exit-code }}
+        OUTCOME: ${{ steps.result.outputs.outcome }}
       run: |
         if [ "${EXIT_CODE:-0}" -ne 0 ]; then
+          if [ "${OUTCOME}" == "BLOCK" ]; then
+            WHAT="Saykai Safety Gate blocked this change"
+          else
+            WHAT="Saykai Safety Gate could not complete"
+          fi
           if [ "${SAYKAI_FAIL_ON_ERROR}" == "true" ]; then
-            echo "::error::Saykai Safety Gate failed (Exit Code: $EXIT_CODE)."
+            echo "::error::${WHAT} (exit code ${EXIT_CODE})."
             exit "$EXIT_CODE"
           else
-            echo "::warning::Saykai Safety Gate failed (Exit Code: $EXIT_CODE), but fail-on-error is false. CI proceeding."
+            echo "::warning::${WHAT} (exit code ${EXIT_CODE}), but fail-on-error is false, so this job is not failing and the change is not stopped."
             exit 0
           fi
         fi

@@ -81,9 +81,59 @@ file that's been run and verified.
 | `runner-repo`     | Repo that hosts the `saykai-runner` release assets (`owner/name`). A dedicated release-hosting repo containing only compiled binaries, not Saykai's source. | No       | `saykai-systems/saykai-releases` |
 | `runner-version`  | `saykai-runner` release tag (e.g. `v1.0.1`) or `latest`.                                 | No       | `latest`                   |
 | `runner-base-url` | Alternate download base for a self-hosted mirror (e.g. `https://downloads.saykai.com/runner`). Requires an explicit `runner-version` — not compatible with `latest`. | No       | _(unset — uses `runner-repo`)_ |
-| `fail-on-error`   | If `true`, the CI job fails if the Saykai engine encounters an internal error (Fail Closed). | No       | `true`                     |
+| `fail-on-error`   | If `true`, the job fails when the gate blocks a change or cannot complete (fail closed). If `false`, the job never fails: blocked changes are reported as warnings but **not stopped**. Use `false` only to trial the gate without enforcing it. | No       | `true`                     |
+| `artifact-name`   | Name of the uploaded evidence artifact. Set a different name for each run if the gate runs more than once in the same job (see [Running the gate more than once](#running-the-gate-more-than-once)). | No | `saykai-safety-pack` |
 | `repo-token`      | Token with `pull-requests: write` on *your own* repo (not `runner-repo`) -- typically `${{ secrets.GITHUB_TOKEN }}`. When set, posts/updates a single PR comment summarizing the run (findings table included). Requires your workflow to grant `pull-requests: write`. | No | _(unset — no PR comment posted)_ |
 | `signing-key`     | Your private signing key (the contents of `saykai-signing.key`, made once with `saykai-runner keygen`), passed as a secret. When set, every safety pack is signed with it so anyone with your public key can verify the evidence. Unset or empty (for example on pull requests from forks, which cannot read secrets): the run is signed with a temporary key that is discarded when the job ends. Needs `saykai-runner` v1.4.0 or newer; with an older runner the action stops rather than ignore the key. See [Signing key](#signing-key). | No | _(unset: temporary key)_ |
+
+### Outputs
+
+| Output              | Description |
+| :------------------ | :---------- |
+| `outcome`           | `PASS` or `BLOCK` from the gate, or `ERROR` if the gate could not produce a result. |
+| `blocking-findings` | Number of findings that blocked the change (`0` on a pass). |
+| `findings`          | Total number of findings, including non-blocking review findings. |
+| `trace-id`          | Trace ID of the run, as recorded in the safety pack. |
+| `signed-by-key`     | Key ID that signed the safety pack. With `signing-key` set, this is your persistent key. |
+| `evidence-uploaded` | `true` if the signed safety pack was uploaded as an artifact. |
+
+Outputs are set on a block too, so a later step can act on them. Give the
+gate step an `id` and add `if: always()` to the later step:
+
+```yaml
+      - name: Run Saykai Safety Gate
+        id: saykai
+        uses: saykai-systems/saykai-action@v1
+        with:
+          github-token: ${{ secrets.SAYKAI_RELEASES_READ_TOKEN }}
+
+      - name: Notify on a block
+        if: always() && steps.saykai.outputs.outcome == 'BLOCK'
+        run: echo "Blocked with ${{ steps.saykai.outputs.blocking-findings }} finding(s)"
+```
+
+### Running the gate more than once
+
+If the gate runs more than once in the same job (for example once per robot
+class), give each run its own `artifact-name`. GitHub rejects an artifact
+name already used in that job, so the later run's evidence would not be
+kept. In a matrix, each entry is its own job and its evidence is kept either
+way, but a name per entry makes the files easy to tell apart. If an upload
+fails for any reason, the job shows an "Evidence not saved" warning and
+`evidence-uploaded` is `false`.
+
+```yaml
+    strategy:
+      matrix:
+        robot: [class_a, class_b]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: saykai-systems/saykai-action@v1
+        with:
+          spec-path: robots/${{ matrix.robot }}/saykai.yml
+          github-token: ${{ secrets.SAYKAI_RELEASES_READ_TOKEN }}
+          artifact-name: saykai-safety-pack-${{ matrix.robot }}
+```
 
 `runner-version` defaults to `latest`, so new runner releases (which can add
 checks) reach your pipeline automatically. If you need runs to be exactly
@@ -134,8 +184,8 @@ SCOPE: 1 file(s) scanned for secrets | 1 Nav2 file(s) audited, 9 safety paramete
     job summary also expands into full remediation guidance and allowlist
     status per finding.
 6.  **Evidence:** The signed `safety_pack.json` for the run is uploaded as
-    a workflow artifact (`saykai-safety-pack`, 90-day retention) on every
-    run, pass or block -- a portable, downloadable record for audit or
+    a workflow artifact (`saykai-safety-pack` unless you set
+    `artifact-name`, 90-day retention) on every run, pass or block -- a portable, downloadable record for audit or
     governance, not just a CI-only signal. See Verifying a Safety Pack
     below.
 
