@@ -43,11 +43,11 @@ inputs:
 
   artifact-name:
     description: >-
-      Name of the uploaded evidence artifact (safety_pack.json). Artifact
-      names must be unique within a workflow run, so set a different name
-      for each invocation when you run the gate more than once (for example
-      in a matrix, one per robot class). Otherwise only the first run's
-      evidence is kept.
+      Name of the uploaded evidence artifact (safety_pack.json). If the gate
+      runs more than once in the same job, give each run a different name:
+      GitHub rejects a name already used in that job, so the later run's
+      evidence would not be kept. In a matrix, a name per entry makes the
+      evidence files easy to tell apart.
     required: false
     default: saykai-safety-pack
 
@@ -175,7 +175,7 @@ runs:
       env:
         ARTIFACT_NAME: ${{ inputs.artifact-name }}
       run: |
-        echo "::warning title=Evidence not saved::The signed safety pack was not uploaded as artifact '${ARTIFACT_NAME}'. If the gate runs more than once in this workflow run, give each run a different artifact-name. Otherwise check the upload step's log."
+        echo "::warning title=Evidence not saved::The signed safety pack was not uploaded as artifact '${ARTIFACT_NAME}'. If the gate runs more than once in this job, give each run a different artifact-name. Otherwise check the upload step's log."
 
     - name: Enforce fail-on-error policy
       shell: bash

@@ -252,11 +252,11 @@ jobs:
             exit 1
           fi
 
-  # Customers run the gate more than once per workflow run (a matrix, or one
-  # run per robot class). Artifact names must be unique per workflow run, so
-  # each run needs its own artifact-name; with distinct names both runs'
-  # evidence must be kept. Reusing a name must not fail the job but must say
-  # so (evidence-uploaded=false), never lose evidence silently.
+  # Customers can run the gate more than once in one job (e.g. one run per
+  # robot class). GitHub rejects an artifact name already used in the same
+  # job, so each run needs its own artifact-name; with distinct names both
+  # runs' evidence must be kept. Reusing a name must not fail the job but
+  # must say so (evidence-uploaded=false), never lose evidence silently.
   expect-two-runs-one-job:
     runs-on: ubuntu-latest
     steps:

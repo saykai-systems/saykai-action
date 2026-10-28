@@ -82,7 +82,7 @@ file that's been run and verified.
 | `runner-version`  | `saykai-runner` release tag (e.g. `v1.0.1`) or `latest`.                                 | No       | `latest`                   |
 | `runner-base-url` | Alternate download base for a self-hosted mirror (e.g. `https://downloads.saykai.com/runner`). Requires an explicit `runner-version` — not compatible with `latest`. | No       | _(unset — uses `runner-repo`)_ |
 | `fail-on-error`   | If `true`, the job fails when the gate blocks a change or cannot complete (fail closed). If `false`, the job never fails: blocked changes are reported as warnings but **not stopped**. Use `false` only to trial the gate without enforcing it. | No       | `true`                     |
-| `artifact-name`   | Name of the uploaded evidence artifact. Must be unique within a workflow run: set a different name for each invocation if the gate runs more than once (see [Running the gate more than once](#running-the-gate-more-than-once)). | No | `saykai-safety-pack` |
+| `artifact-name`   | Name of the uploaded evidence artifact. Set a different name for each run if the gate runs more than once in the same job (see [Running the gate more than once](#running-the-gate-more-than-once)). | No | `saykai-safety-pack` |
 | `repo-token`      | Token with `pull-requests: write` on *your own* repo (not `runner-repo`) -- typically `${{ secrets.GITHUB_TOKEN }}`. When set, posts/updates a single PR comment summarizing the run (findings table included). Requires your workflow to grant `pull-requests: write`. | No | _(unset — no PR comment posted)_ |
 | `signing-key`     | Your private signing key (the contents of `saykai-signing.key`, made once with `saykai-runner keygen`), passed as a secret. When set, every safety pack is signed with it so anyone with your public key can verify the evidence. Unset or empty (for example on pull requests from forks, which cannot read secrets): the run is signed with a temporary key that is discarded when the job ends. Needs `saykai-runner` v1.4.0 or newer; with an older runner the action stops rather than ignore the key. See [Signing key](#signing-key). | No | _(unset: temporary key)_ |
 
@@ -114,11 +114,13 @@ gate step an `id` and add `if: always()` to the later step:
 
 ### Running the gate more than once
 
-GitHub requires artifact names to be unique within a workflow run. If the
-gate runs more than once (a matrix, or one run per robot class), give each
-run its own `artifact-name`, or only the first run's evidence is kept. If an
-upload fails for this or any other reason, the job shows an "Evidence not
-saved" warning and `evidence-uploaded` is `false`.
+If the gate runs more than once in the same job (for example once per robot
+class), give each run its own `artifact-name`. GitHub rejects an artifact
+name already used in that job, so the later run's evidence would not be
+kept. In a matrix, each entry is its own job and its evidence is kept either
+way, but a name per entry makes the files easy to tell apart. If an upload
+fails for any reason, the job shows an "Evidence not saved" warning and
+`evidence-uploaded` is `false`.
 
 ```yaml
     strategy:
