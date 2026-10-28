@@ -243,6 +243,12 @@ PY
   fi
 }
 
+# Clear results left by an earlier run in this job (the gate can run more
+# than once, e.g. once per robot class). Without this, a run that fails
+# before writing its own results would be reported, and its evidence
+# uploaded, using the previous run's files.
+rm -f "$RESULT_PATH" safety_pack.json
+
 # Run (capture exit code so we can always write a summary)
 echo "Running Saykai runner..."
 set +e

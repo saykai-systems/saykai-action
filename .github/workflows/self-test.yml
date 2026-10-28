@@ -25,10 +25,12 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run Saykai (expect PASS)
+        id: saykai
         uses: ./
         with:
           spec-path: test/fixtures/pass/saykai.yml
           github-token: ${{ secrets.SAYKAI_RELEASES_READ_TOKEN }}
+          artifact-name: saykai-safety-pack-expect-pass
 
       - name: Assert outcome is PASS
         run: |
@@ -39,6 +41,14 @@ jobs:
             echo "::error::Expected PASS but got '$OUTCOME'"
             exit 1
           fi
+
+      - name: Assert the action's outputs
+        run: |
+          echo "outcome=${{ steps.saykai.outputs.outcome }} blocking=${{ steps.saykai.outputs.blocking-findings }} trace=${{ steps.saykai.outputs.trace-id }} uploaded=${{ steps.saykai.outputs.evidence-uploaded }}"
+          [[ "${{ steps.saykai.outputs.outcome }}" == "PASS" ]] || { echo "::error::outcome output should be PASS"; exit 1; }
+          [[ "${{ steps.saykai.outputs.blocking-findings }}" == "0" ]] || { echo "::error::blocking-findings output should be 0"; exit 1; }
+          [[ -n "${{ steps.saykai.outputs.trace-id }}" ]] || { echo "::error::trace-id output is empty"; exit 1; }
+          [[ "${{ steps.saykai.outputs.evidence-uploaded }}" == "true" ]] || { echo "::error::evidence was not uploaded"; exit 1; }
 
   # Keeps quickstart/ honest: if a future change to the runner or its
   # default rules would break the copy-pasteable starter template, this
@@ -53,6 +63,7 @@ jobs:
         with:
           spec-path: quickstart/saykai.yml
           github-token: ${{ secrets.SAYKAI_RELEASES_READ_TOKEN }}
+          artifact-name: saykai-safety-pack-expect-quickstart-pass
 
       - name: Assert outcome is PASS
         run: |
@@ -76,6 +87,7 @@ jobs:
         with:
           spec-path: test/fixtures/block/saykai.yml
           github-token: ${{ secrets.SAYKAI_RELEASES_READ_TOKEN }}
+          artifact-name: saykai-safety-pack-expect-block
 
       - name: Assert the gate actually blocked
         run: |
@@ -97,6 +109,12 @@ jobs:
             exit 1
           fi
 
+          # Outputs must still be set when the gate fails the step, and the
+          # evidence of a blocked change must still be uploaded.
+          [[ "${{ steps.saykai.outputs.outcome }}" == "BLOCK" ]] || { echo "::error::outcome output should be BLOCK, got '${{ steps.saykai.outputs.outcome }}'"; exit 1; }
+          [[ "${{ steps.saykai.outputs.blocking-findings }}" -ge 1 ]] || { echo "::error::blocking-findings output should be at least 1"; exit 1; }
+          [[ "${{ steps.saykai.outputs.evidence-uploaded }}" == "true" ]] || { echo "::error::evidence of the blocked run was not uploaded"; exit 1; }
+
   # The jobs above only ever exercise Room 3 (Nav2 policy audit). Room 1
   # (entropy/secret heuristics) runs on every invocation regardless, but
   # expect-pass/expect-block never contain anything for it to actually
@@ -115,6 +133,7 @@ jobs:
         with:
           spec-path: test/fixtures/secret/saykai.yml
           github-token: ${{ secrets.SAYKAI_RELEASES_READ_TOKEN }}
+          artifact-name: saykai-safety-pack-expect-secret-block
 
       - name: Assert the gate blocked on AWS_KEY
         run: |
@@ -146,6 +165,7 @@ jobs:
         with:
           spec-path: test/fixtures/behavioral-pass/saykai.yml
           github-token: ${{ secrets.SAYKAI_RELEASES_READ_TOKEN }}
+          artifact-name: saykai-safety-pack-expect-behavioral-pass
 
       - name: Assert outcome is PASS
         run: |
@@ -178,10 +198,12 @@ jobs:
           echo "$PUB" > "$RUNNER_TEMP/test-signing.pub"
 
       - name: Run Saykai with the persistent key
+        id: saykai
         uses: ./
         with:
           spec-path: test/fixtures/pass/saykai.yml
           github-token: ${{ secrets.SAYKAI_RELEASES_READ_TOKEN }}
+          artifact-name: saykai-safety-pack-expect-persistent-signing
           signing-key: ${{ steps.key.outputs.seed }}
 
       - name: Assert the evidence verifies with only the public key
@@ -194,6 +216,7 @@ jobs:
             echo "::error::verify accepted a key that did not sign this pack"
             exit 1
           fi
+          [[ -n "${{ steps.saykai.outputs.signed-by-key }}" ]] || { echo "::error::signed-by-key output is empty"; exit 1; }
 
   expect-behavioral-block:
     runs-on: ubuntu-latest
@@ -207,6 +230,7 @@ jobs:
         with:
           spec-path: test/fixtures/behavioral-block/saykai.yml
           github-token: ${{ secrets.SAYKAI_RELEASES_READ_TOKEN }}
+          artifact-name: saykai-safety-pack-expect-behavioral-block
 
       - name: Assert the gate blocked on BEHAVIORAL_FATAL
         run: |
@@ -227,3 +251,48 @@ jobs:
             echo "::error::Expected finding BEHAVIORAL_FATAL not present in run-result.json"
             exit 1
           fi
+
+  # Customers run the gate more than once per workflow run (a matrix, or one
+  # run per robot class). Artifact names must be unique per workflow run, so
+  # each run needs its own artifact-name; with distinct names both runs'
+  # evidence must be kept. Reusing a name must not fail the job but must say
+  # so (evidence-uploaded=false), never lose evidence silently.
+  expect-two-runs-one-job:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: First run (PASS fixture)
+        id: first
+        uses: ./
+        with:
+          spec-path: test/fixtures/pass/saykai.yml
+          github-token: ${{ secrets.SAYKAI_RELEASES_READ_TOKEN }}
+          artifact-name: saykai-safety-pack-two-runs-first
+
+      - name: Second run (BLOCK fixture, different artifact name)
+        id: second
+        continue-on-error: true
+        uses: ./
+        with:
+          spec-path: test/fixtures/block/saykai.yml
+          github-token: ${{ secrets.SAYKAI_RELEASES_READ_TOKEN }}
+          artifact-name: saykai-safety-pack-two-runs-second
+
+      - name: Third run (reuses the first run's artifact name)
+        id: third
+        uses: ./
+        with:
+          spec-path: test/fixtures/pass/saykai.yml
+          github-token: ${{ secrets.SAYKAI_RELEASES_READ_TOKEN }}
+          artifact-name: saykai-safety-pack-two-runs-first
+
+      - name: Assert each run reported and kept its own evidence
+        run: |
+          echo "first=${{ steps.first.outputs.outcome }}/${{ steps.first.outputs.evidence-uploaded }} second=${{ steps.second.outputs.outcome }}/${{ steps.second.outputs.evidence-uploaded }} third=${{ steps.third.outputs.outcome }}/${{ steps.third.outputs.evidence-uploaded }}"
+          [[ "${{ steps.first.outputs.outcome }}" == "PASS" ]] || { echo "::error::first run should PASS"; exit 1; }
+          [[ "${{ steps.second.outputs.outcome }}" == "BLOCK" ]] || { echo "::error::second run should BLOCK, not report the first run's result"; exit 1; }
+          [[ "${{ steps.first.outputs.trace-id }}" != "${{ steps.second.outputs.trace-id }}" ]] || { echo "::error::both runs reported the same trace ID"; exit 1; }
+          [[ "${{ steps.first.outputs.evidence-uploaded }}" == "true" ]] || { echo "::error::first run's evidence was not uploaded"; exit 1; }
+          [[ "${{ steps.second.outputs.evidence-uploaded }}" == "true" ]] || { echo "::error::second run's evidence was not uploaded"; exit 1; }
+          [[ "${{ steps.third.outputs.evidence-uploaded }}" == "false" ]] || { echo "::error::a reused artifact name should report evidence-uploaded=false"; exit 1; }
