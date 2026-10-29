@@ -298,6 +298,26 @@ jobs:
           [[ "${{ steps.second.outputs.evidence-uploaded }}" == "true" ]] || { echo "::error::second run's evidence was not uploaded"; exit 1; }
           [[ "${{ steps.third.outputs.evidence-uploaded }}" == "false" ]] || { echo "::error::a reused artifact name should report evidence-uploaded=false"; exit 1; }
 
+  # nav2-release reaches the runner and is recorded in the sealed evidence.
+  expect-nav2-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Run Saykai with a Nav2 release set
+        id: saykai
+        uses: ./
+        with:
+          spec-path: test/fixtures/pass/saykai.yml
+          github-token: ${{ secrets.SAYKAI_RELEASES_READ_TOKEN }}
+          artifact-name: saykai-safety-pack-expect-nav2-release
+          nav2-release: Jazzy
+
+      - name: Assert the release was used and recorded
+        run: |
+          [[ "${{ steps.saykai.outputs.outcome }}" == "PASS" ]] || { echo "::error::expected PASS, got ${{ steps.saykai.outputs.outcome }}"; exit 1; }
+          grep -q 'Nav2 parameter reference: jazzy @' safety_pack.json || { echo "::error::safety pack does not record the Nav2 release"; exit 1; }
+
   # Shadow mode: a violation must be reported, recorded as shadow mode and
   # uploaded as evidence, without failing the step.
   expect-observe:

@@ -262,6 +262,24 @@ if [[ "${SAYKAI_OBSERVE:-false}" == "true" ]]; then
   echo "::notice title=Shadow mode::observe is true: this run reports what it would block but does not fail the job. Remove observe to enforce."
 fi
 
+# nav2-release needs a runner that has --nav2-release (v1.6.0+). An older
+# runner would reject the flag and the run would fail for a reason that has
+# nothing to do with the robot, so say so plainly instead. Same help-capture
+# pattern as the signing-key check above.
+NAV2_RELEASE="$(echo "${SAYKAI_NAV2_RELEASE:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+if [[ -n "$NAV2_RELEASE" ]]; then
+  if [[ ! "$NAV2_RELEASE" =~ ^[a-z]+$ ]]; then
+    echo "::error title=nav2-release invalid::nav2-release should be a Nav2 release name such as humble, jazzy or kilted."
+    exit 1
+  fi
+  RUN_HELP="$("$RUNNER_PATH" run -h 2>&1 || true)"
+  if [[ "$RUN_HELP" != *nav2-release* ]]; then
+    echo "::error title=nav2-release not supported::nav2-release is set, but the saykai-runner that was installed predates it. Use runner-version v1.6.0 or newer."
+    exit 1
+  fi
+  RUN_ARGS+=(--nav2-release "$NAV2_RELEASE")
+fi
+
 # Run (capture exit code so we can always write a summary)
 echo "Running Saykai runner..."
 set +e
