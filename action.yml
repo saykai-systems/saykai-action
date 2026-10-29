@@ -50,6 +50,16 @@ inputs:
     required: false
     default: 'false'
 
+  nav2-release:
+    description: >-
+      The Nav2 release your robot runs: humble, iron, jazzy, kilted or
+      rolling. Turns on the checks for safety parameters that release does
+      not read (a misnamed or outdated limit has no effect, and the robot
+      runs on the default). Overrides nav2.release in your policy file.
+      Needs saykai-runner v1.6.0 or newer.
+    required: false
+    default: ''
+
   artifact-name:
     description: >-
       Name of the uploaded evidence artifact (safety_pack.json). If the gate
@@ -121,6 +131,7 @@ runs:
         SAYKAI_RUNNER_TOKEN: ${{ inputs.github-token }}
         SAYKAI_SIGNING_KEY: ${{ inputs.signing-key }}
         SAYKAI_OBSERVE: ${{ inputs.observe }}
+        SAYKAI_NAV2_RELEASE: ${{ inputs.nav2-release }}
       run: |
         set +e
         bash "${{ github.action_path }}/scripts/run.sh" \
