@@ -164,12 +164,16 @@ except (OSError, json.JSONDecodeError) as e:
     sys.exit(0)
 
 outcome = d.get("outcome", "UNKNOWN")
+mode = d.get("mode", "")
 trace_id = d.get("trace_id", "?")
 seal = d.get("seal", "")
 robot_class = d.get("robot_class", "")
 summary = d.get("summary", {}) or {}
 findings = d.get("findings", []) or []
 
+if mode == "OBSERVER":
+    print("**Mode:** shadow mode (`observe: true`). Nothing was blocked; a BLOCK outcome shows what enforcement would have stopped.")
+    print("")
 print(f"**Outcome:** {outcome}")
 print(f"**Trace ID:** {trace_id}")
 if seal:
@@ -249,10 +253,19 @@ PY
 # uploaded, using the previous run's files.
 rm -f "$RESULT_PATH" safety_pack.json
 
+# Shadow mode: the runner reports what it would block and exits 0, and
+# records the run as OBSERVER in the signed evidence. Only the exact value
+# "true" turns it on, so a typo can never silently disable enforcement.
+RUN_ARGS=(run --spec "$SPEC_PATH")
+if [[ "${SAYKAI_OBSERVE:-false}" == "true" ]]; then
+  RUN_ARGS+=(--observe)
+  echo "::notice title=Shadow mode::observe is true: this run reports what it would block but does not fail the job. Remove observe to enforce."
+fi
+
 # Run (capture exit code so we can always write a summary)
 echo "Running Saykai runner..."
 set +e
-"$RUNNER_PATH" run --spec "$SPEC_PATH"
+"$RUNNER_PATH" "${RUN_ARGS[@]}"
 RC=$?
 set -e
 

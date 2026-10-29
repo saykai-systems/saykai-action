@@ -22,7 +22,7 @@ jobs:
   expect-pass:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Run Saykai (expect PASS)
         id: saykai
@@ -56,7 +56,7 @@ jobs:
   expect-quickstart-pass:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Run Saykai against quickstart/ (expect PASS)
         uses: ./
@@ -78,7 +78,7 @@ jobs:
   expect-block:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Run Saykai (expect BLOCK)
         id: saykai
@@ -112,6 +112,7 @@ jobs:
           # Outputs must still be set when the gate fails the step, and the
           # evidence of a blocked change must still be uploaded.
           [[ "${{ steps.saykai.outputs.outcome }}" == "BLOCK" ]] || { echo "::error::outcome output should be BLOCK, got '${{ steps.saykai.outputs.outcome }}'"; exit 1; }
+          [[ "${{ steps.saykai.outputs.mode }}" == "ENFORCEMENT" ]] || { echo "::error::mode output should be ENFORCEMENT, got '${{ steps.saykai.outputs.mode }}'"; exit 1; }
           [[ "${{ steps.saykai.outputs.blocking-findings }}" -ge 1 ]] || { echo "::error::blocking-findings output should be at least 1"; exit 1; }
           [[ "${{ steps.saykai.outputs.evidence-uploaded }}" == "true" ]] || { echo "::error::evidence of the blocked run was not uploaded"; exit 1; }
 
@@ -124,7 +125,7 @@ jobs:
   expect-secret-block:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Run Saykai (expect BLOCK on Room 1 secret detection)
         id: saykai
@@ -158,7 +159,7 @@ jobs:
   expect-behavioral-pass:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Run Saykai (expect PASS on Room 2 correct decision)
         uses: ./
@@ -185,7 +186,7 @@ jobs:
   expect-persistent-signing:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Make a throwaway signing key
         id: key
@@ -221,7 +222,7 @@ jobs:
   expect-behavioral-block:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Run Saykai (expect BLOCK on Room 2 wrong decision)
         id: saykai
@@ -260,7 +261,7 @@ jobs:
   expect-two-runs-one-job:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: First run (PASS fixture)
         id: first
@@ -296,3 +297,27 @@ jobs:
           [[ "${{ steps.first.outputs.evidence-uploaded }}" == "true" ]] || { echo "::error::first run's evidence was not uploaded"; exit 1; }
           [[ "${{ steps.second.outputs.evidence-uploaded }}" == "true" ]] || { echo "::error::second run's evidence was not uploaded"; exit 1; }
           [[ "${{ steps.third.outputs.evidence-uploaded }}" == "false" ]] || { echo "::error::a reused artifact name should report evidence-uploaded=false"; exit 1; }
+
+  # Shadow mode: a violation must be reported, recorded as shadow mode and
+  # uploaded as evidence, without failing the step.
+  expect-observe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Run Saykai in shadow mode on a violating config
+        id: saykai
+        uses: ./
+        with:
+          spec-path: test/fixtures/block/saykai.yml
+          github-token: ${{ secrets.SAYKAI_RELEASES_READ_TOKEN }}
+          artifact-name: saykai-safety-pack-expect-observe
+          observe: true
+
+      - name: Assert it reported the block without failing
+        run: |
+          echo "outcome=${{ steps.saykai.outputs.outcome }} mode=${{ steps.saykai.outputs.mode }} uploaded=${{ steps.saykai.outputs.evidence-uploaded }}"
+          [[ "${{ steps.saykai.outputs.outcome }}" == "BLOCK" ]] || { echo "::error::shadow mode should still report BLOCK"; exit 1; }
+          [[ "${{ steps.saykai.outputs.mode }}" == "OBSERVER" ]] || { echo "::error::mode output should be OBSERVER"; exit 1; }
+          [[ "${{ steps.saykai.outputs.evidence-uploaded }}" == "true" ]] || { echo "::error::shadow-mode evidence was not uploaded"; exit 1; }
+          grep -q '"mode": *"OBSERVER"' outputs/run-result.json || { echo "::error::run-result.json does not record shadow mode"; exit 1; }

@@ -41,6 +41,15 @@ inputs:
     required: false
     default: 'true'
 
+  observe:
+    description: >-
+      If true, run in shadow mode: the gate reports everything it would
+      block, but the job does not fail. The evidence records the run as
+      shadow mode, so it can never be mistaken for an enforced run. Use it to
+      trial the gate on real pull requests, then remove it to enforce.
+    required: false
+    default: 'false'
+
   artifact-name:
     description: >-
       Name of the uploaded evidence artifact (safety_pack.json). If the gate
@@ -76,8 +85,11 @@ inputs:
 
 outputs:
   outcome:
-    description: PASS or BLOCK from the gate, or ERROR if the gate could not produce a result.
+    description: PASS or BLOCK from the gate, or ERROR if the gate could not produce a result. In shadow mode, BLOCK means the change would have been blocked.
     value: ${{ steps.result.outputs.outcome }}
+  mode:
+    description: ENFORCEMENT, or OBSERVER when observe is true (shadow mode).
+    value: ${{ steps.result.outputs.mode }}
   blocking-findings:
     description: Number of findings that blocked the change (0 on a pass).
     value: ${{ steps.result.outputs.blocking-findings }}
@@ -108,6 +120,7 @@ runs:
       env:
         SAYKAI_RUNNER_TOKEN: ${{ inputs.github-token }}
         SAYKAI_SIGNING_KEY: ${{ inputs.signing-key }}
+        SAYKAI_OBSERVE: ${{ inputs.observe }}
       run: |
         set +e
         bash "${{ github.action_path }}/scripts/run.sh" \
@@ -141,6 +154,7 @@ runs:
         pack = load("safety_pack.json")
         summary = r.get("summary") or {}
         print("outcome=" + str(r.get("outcome") or "ERROR"))
+        print("mode=" + str(r.get("mode") or ""))
         print("blocking-findings=" + str(summary.get("blocking_findings", "")))
         print("findings=" + str(summary.get("findings_count", "")))
         print("trace-id=" + str(r.get("trace_id") or ""))
@@ -156,10 +170,11 @@ runs:
       id: upload
       if: always()
       continue-on-error: true
-      # Pinned to the exact commit of v4.6.2 (what @v4 pointed to when this
-      # was written), so the code that handles customers' evidence can't
-      # change underneath them.
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      # Pinned to the exact commit of v6.0.0, so the code that handles
+      # customers' evidence can't change underneath them. v6 is v4's upload
+      # behavior on Node 24 (Node 20 is being retired on GitHub runners); it
+      # needs Actions runner 2.327.1 or newer.
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
       with:
         name: ${{ inputs.artifact-name }}
         path: safety_pack.json
