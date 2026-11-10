@@ -379,4 +379,4 @@ release artifacts never expose.*
 
 ## License
 
-[MIT](LICENSE) © 2026 Saykai
+[MIT](LICENSE) © 2025-2026 Saykai, Inc.
